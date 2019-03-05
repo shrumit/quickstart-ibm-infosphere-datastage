@@ -1,0 +1,490 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Creates IBM InfoSphere DataStage Quick Start as a Kubernetes cluster within an existing VPC. This template creates EC2 instances and related resources. You will be billed for the AWS resources used if you create a stack from this template.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [{
+                "Label": {
+                    "default": "Licensing"
+                },
+                "Parameters": [
+                    "LicenseAgreement",
+                    "IBMClientNumber",
+                    "IBMPartNumber"
+                ]
+            }, {
+                "Label": {
+                    "default": "Quick Start Configuration"
+                },
+                "Parameters": [
+                    "QSS3BucketName",
+                    "QSS3KeyPrefix",
+                    "OrderID"
+                ]
+            }, {
+                "Label": {
+                    "default": "Network Configuration"
+                },
+                "Parameters": [
+                    "NumberOfAZs",
+                    "AllowedPublicCIDR",
+                    "PrivateSubnet1CIDR",
+                    "PrivateSubnet2CIDR",
+                    "PrivateSubnet3CIDR",
+                    "PublicSubnet1CIDR",
+                    "PublicSubnet2CIDR",
+                    "PublicSubnet3CIDR",
+                    "VPCCIDR"
+                ]
+            }, {
+                "Label": {
+                    "default": "EC2 Instance Configuration"
+                },
+                "Parameters": [
+                    "KeyPairName",
+                    "DSClientInstanceType",
+                    "k8sMasterInstanceType",
+                    "k8sWorkerInstanceType"
+                ]
+            }, {
+                "Label": {
+                    "default": "DataStage Application Configuration"
+                },
+                "Parameters": [
+                    "IISPassword"
+                ]
+            }],
+            "ParameterLabels": {
+                "AllowedPublicCIDR": {
+                    "default": "Allowed Public CIDR"
+                },
+                "DSClientInstanceType": {
+                    "default": "DataStage Client Instance Type"
+                },
+                "IBMClientNumber": {
+                    "default": "IBM Client Number"
+                },
+                "IBMPartNumber": {
+                    "default": "IBM Part Number"
+                },
+                "IISPassword": {
+                    "default": "IBM InfoSphere Password"
+                },
+                "k8sMasterInstanceType": {
+                    "default": "Kubernetes Master Instance Type"
+                },
+                "k8sWorkerInstanceType": {
+                    "default": "Kubernetes Worker Instance Type"
+                },
+                "KeyPairName": {
+                    "default": "Key Pair Name"
+                },
+                "LicenseAgreement": {
+                    "default": "License Agreement"
+                },
+                "NumberOfAZs": {
+                    "default": "Number Of Availability Zones"
+                },
+                "OrderID": {
+                    "default": "Order ID"
+                },
+                "PrivateSubnet1ID": {
+                    "default": "Private Subnet 1 ID"
+                },
+                "PrivateSubnet2ID": {
+                    "default": "Private Subnet 2 ID"
+                },
+                "PrivateSubnet3ID": {
+                    "default": "Private Subnet 3 ID"
+                },
+                "PublicSubnet1ID": {
+                    "default": "Public Subnet 1 ID"
+                },
+                "PublicSubnet2ID": {
+                    "default": "Public Subnet 2 ID"
+                },
+                "PublicSubnet3ID": {
+                    "default": "Public Subnet 3 ID"
+                },
+                "QSS3BucketName": {
+                    "default": "Quick Start S3 Bucket Name"
+                },
+                "QSS3KeyPrefix": {
+                    "default": "Quick Start S3 Key Prefix"
+                },
+                "VPCID": {
+                    "default": "Order ID"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "AllowedPublicCIDR": {
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Description": "The CIDR IP range that is permitted to access the cluster. We recommend that you set this value to a trusted IP range.",
+            "Type": "String"
+        },
+        "DSClientInstanceType": {
+            "AllowedValues": [
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge",
+                "m5.large",
+                "m5.xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.large",
+            "Description": "Type of EC2 instance for the DataStage Windows Client instance",
+            "Type": "String"
+        },
+        "IBMClientNumber": {
+            "AllowedPattern": "[0-9]+",
+            "Description": "ICN associated with your license",
+            "Type": "String"
+        },
+        "IBMPartNumber": {
+            "AllowedValues": [
+                "D1VLALL",
+                "D1P3RLL"
+            ],
+            "Description": "Part Number associated with your license",
+            "Type": "String"
+        },
+        "IISPassword": {
+            "Description": "Password to be set on the DataStage application for the username \"isadmin\"",
+            "Type": "String",
+            "MinLength": "8",
+            "MaxLength": "20",
+            "NoEcho": "true",
+            "AllowedPattern": "(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[\\p{Punct}])([0-9a-zA-Z\\p{Punct}]+)",
+            "ConstraintDescription": "Must be 8-20 characters, containing one number, one special character, one lower case and one upper case character."
+        },
+        "k8sMasterInstanceType": {
+            "AllowedValues": [
+                "t3.micro",
+                "t3.small",
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.medium",
+            "Description": "Type of EC2 instance for the Kubernetes master nodes",
+            "Type": "String"
+        },
+        "k8sWorkerInstanceType": {
+            "AllowedValues": [
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.large",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge",
+                "c5.xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "c5.9xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5.2xlarge",
+                "r5.4xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.xlarge",
+            "Description": "Type of EC2 instance for the Kubernetes worker nodes",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Description": "The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "LicenseAgreement": {
+            "Description": "I have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
+            "Type": "String",
+            "Default": "-",
+            "AllowedValues": [
+                "I agree",
+                "-"
+            ]
+        },
+        "NumberOfAZs": {
+            "AllowedValues": [
+                "2",
+                "3"
+            ],
+            "Default": "3",
+            "Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
+            "Type": "String"
+        },
+        "OrderID": {
+            "AllowedPattern": "[a-z0-9]+",
+            "ConstraintDescription": "Non-empty; lower case letters and numbers",
+            "Default": "ds1",
+            "Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
+            "Type": "String"
+        },
+        "PrivateSubnet1ID": {
+            "Description": "ID of private subnet in Availability Zone 1",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PrivateSubnet2ID": {
+            "Description": "ID of private subnet in Availability Zone 2",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PrivateSubnet3ID": {
+            "Description": "ID of private subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PublicSubnet1ID": {
+            "Description": "ID of public subnet in Availability Zone 1",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PublicSubnet2ID": {
+            "Description": "ID of public subnet in Availability Zone 2",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PublicSubnet3ID": {
+            "Description": "ID of public subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "QSS3BucketName": {
+            "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+            "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+            "Default": "my-bucket",
+            "Description": "S3 bucket name for the Quick Start assets",
+            "Type": "String"
+        },
+        "QSS3KeyPrefix": {
+            "AllowedPattern": "^[0-9a-zA-Z-/]*/$",
+            "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Default": "total/",
+            "Description": "S3 key prefix for the Quick Start assets",
+            "Type": "String"
+        },
+        "VPCID": {
+            "Description": "ID of your existing VPC for deployment",
+            "Type": "AWS::EC2::VPC::Id"
+        }
+    },
+    "Conditions": {
+        "3AZCondition": {
+            "Fn::Equals": [{
+                    "Ref": "NumberOfAZs"
+                },
+                "3"
+            ]
+        },
+        "GovCloudCondition": {
+            "Fn::Equals": [{
+                    "Ref": "AWS::Region"
+                },
+                "us-gov-west-1"
+            ]
+        }
+    },
+    "Rules": {
+        "LicenseAgreementRule": {
+            "Assertions": [{
+                "Assert": {
+                    "Fn::Contains": [
+                        ["I agree"],
+                        { "Ref": "LicenseAgreement" }
+                    ]
+                },
+                "AssertDescription": "User must agree to the terms of the license agreement."
+            }]
+        }
+    },
+    "Resources": {
+        "DataStageClientStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/ibm-datastage-client.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "AllowedPublicCIDR": {
+                        "Ref": "AllowedPublicCIDR"
+                    },
+                    "DSClientInstanceType": {
+                        "Ref": "DSClientInstanceType"
+                    },
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "LicenseAgreement": {
+                        "Ref": "LicenseAgreement"
+                    },
+                    "NumberOfAZs": {
+                        "Ref": "NumberOfAZs"
+                    },
+                    "OrderID": {
+                        "Ref": "OrderID"
+                    },
+                    "PublicSubnet1ID": {
+                        "Ref": "PublicSubnet1ID"
+                    },
+                    "PublicSubnet2ID": {
+                        "Ref": "PublicSubnet2ID"
+                    },
+                    "PublicSubnet3ID": {
+                        "Ref": "PublicSubnet3ID"
+                    },
+                    "VPCID": {
+                        "Ref": "VPCID"
+                    }
+                }
+            }
+        },
+        "EFSStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/ibm-datastage-efs.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "NumberOfAZs": {
+                        "Ref": "NumberOfAZs"
+                    },
+                    "OrderID": {
+                        "Ref": "OrderID"
+                    },
+                    "PrivateSubnet1ID": {
+                        "Ref": "PrivateSubnet1ID"
+                    },
+                    "PrivateSubnet2ID": {
+                        "Ref": "PrivateSubnet2ID"
+                    },
+                    "PrivateSubnet3ID": {
+                        "Ref": "PrivateSubnet3ID"
+                    },
+                    "VPCID": {
+                        "Ref": "VPCID"
+                    }
+                }
+            }
+        },
+        "DataStageClusterStack": {
+            "DependsOn": "DataStageClientStack",
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/ibm-datastage-ha-cluster.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "AllowedPublicCIDR": {
+                        "Ref": "AllowedPublicCIDR"
+                    },
+                    "DataStageClientSecurityGroupID": {
+                        "Fn::GetAtt":[
+                            "DataStageClientStack",
+                            "Outputs.DataStageClientSecurityGroupID"
+                        ]
+                    },
+                    "EFSID": {
+                        "Fn::GetAtt": [
+                            "EFSStack",
+                            "Outputs.EFSID"
+                        ]
+                    },
+                    "IBMClientNumber": {
+                        "Ref": "IBMClientNumber"
+                    },
+                    "IBMPartNumber": {
+                        "Ref": "IBMPartNumber"
+                    },
+                    "IISPassword": {
+                        "Ref": "IISPassword"
+                    },
+                    "k8sMasterInstanceType": {
+                        "Ref": "k8sMasterInstanceType"
+                    },
+                    "k8sWorkerInstanceType": {
+                        "Ref": "k8sWorkerInstanceType"
+                    },
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "LicenseAgreement": {
+                        "Ref": "LicenseAgreement"
+                    },
+                    "MasterNLB": {
+                        "Fn::GetAtt": [
+                            "DataStageClientStack",
+                            "Outputs.MasterNLB"
+                        ]
+                    },
+                    "MasterNLBDomainName": {
+                        "Fn::GetAtt": [
+                            "DataStageClientStack",
+                            "Outputs.MasterNLBDomainName"
+                        ]
+                    },
+                    "NumberOfAZs": {
+                        "Ref": "NumberOfAZs"
+                    },
+                    "OrderID": {
+                        "Ref": "OrderID"
+                    },
+                    "PrivateSubnet1ID": {
+                        "Ref": "PrivateSubnet1ID"
+                    },
+                    "PrivateSubnet2ID": {
+                        "Ref": "PrivateSubnet2ID"
+                    },
+                    "PrivateSubnet3ID": {
+                        "Ref": "PrivateSubnet3ID"
+                    },
+                    "VPCID": {
+                        "Ref": "VPCID"
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "LaunchpadURL": {
+            "Description": "URL for Launchpad",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataStageClientStack",
+                    "Outputs.LaunchpadURL"
+                ]
+            }
+        }
+    }
+}
