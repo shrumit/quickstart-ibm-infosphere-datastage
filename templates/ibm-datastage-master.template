@@ -18,8 +18,7 @@
                 },
                 "Parameters": [
                     "QSS3BucketName",
-                    "QSS3KeyPrefix",
-                    "OrderID"
+                    "QSS3KeyPrefix"
                 ]
             }, {
                 "Label": {
@@ -44,15 +43,16 @@
                 "Parameters": [
                     "KeyPairName",
                     "DSClientInstanceType",
-                    "k8sMasterInstanceType",
-                    "k8sWorkerInstanceType"
+                    "ISRepoInstanceType",
+                    "ISEngineInstanceType"
                 ]
             }, {
                 "Label": {
                     "default": "DataStage Application Configuration"
                 },
                 "Parameters": [
-                    "IISPassword"
+                    "IISPassword",
+                    "OrderID"
                 ]
             }],
             "ParameterLabels": {
@@ -63,7 +63,7 @@
                     "default": "Availability Zones"
                 },
                 "DSClientInstanceType": {
-                    "default": "DataStage Client Instance Type"
+                    "default": "InfoSphere DataStage Client Instance Type"
                 },
                 "IBMClientNumber": {
                     "default": "IBM Client Number"
@@ -74,11 +74,11 @@
                 "IISPassword": {
                     "default": "IBM InfoSphere Password"
                 },
-                "k8sMasterInstanceType": {
-                    "default": "Kubernetes Master Instance Type"
+                "ISRepoInstanceType": {
+                    "default": "InfoSphere DataStage Repo Worker Instance Type"
                 },
-                "k8sWorkerInstanceType": {
-                    "default": "Kubernetes Worker Instance Type"
+                "ISEngineInstanceType": {
+                    "default": "InfoSphere DataStage Engine Worker Instance Type"
                 },
                 "KeyPairName": {
                     "default": "Key Pair Name"
@@ -116,8 +116,8 @@
                 "QSS3KeyPrefix": {
                     "default": "Quick Start S3 Key Prefix"
                 },
-                "VPCID": {
-                    "default": "Order ID"
+                "VPCCIDR": {
+                    "default": "The CIDR block for the VPC"
                 }
             }
         }
@@ -126,11 +126,11 @@
         "AllowedPublicCIDR": {
             "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
-            "Description": "The CIDR IP range that is permitted to access the cluster. We recommend that you set this value to a trusted IP range.",
+            "Description": "The CIDR IP range that is permitted to access the cluster. It is recommended that this value be set to a trusted IP range.",
             "Type": "String"
         },
         "AvailabilityZones": {
-            "Description": "List of Availability Zones to use for the subnets in the VPC. It is highly recommended that you use three AZs but two will be accepted.",
+            "Description": "List of Availability Zones to use for the subnets in the VPC. It is recommended that three AZs are selected but two will be accepted.",
             "Type": "List<AWS::EC2::AvailabilityZone::Name>"
         },
         "DSClientInstanceType": {
@@ -138,24 +138,24 @@
                 "t3.medium",
                 "t3.large",
                 "t3.xlarge",
+                "t3.2xlarge",
                 "m5.large",
-                "m5.xlarge"
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge"
             ],
             "ConstraintDescription": "Must contain valid instance type",
-            "Default": "t3.large",
+            "Default": "t3.xlarge",
             "Description": "Type of EC2 instance for the DataStage Windows Client instance",
             "Type": "String"
         },
         "IBMClientNumber": {
             "AllowedPattern": "[0-9]+",
-            "Description": "ICN associated with your license",
+            "Description": "IBM Client Number associated with your license",
+            "NoEcho": "true",
             "Type": "String"
         },
         "IBMPartNumber": {
-            "AllowedValues": [
-                "D1VLALL",
-                "D1P3RLL"
-            ],
             "Description": "Part Number associated with your license",
             "Type": "String"
         },
@@ -168,39 +168,80 @@
             "AllowedPattern": "(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[\\p{Punct}])([0-9a-zA-Z\\p{Punct}]+)",
             "ConstraintDescription": "Must be 8-20 characters, containing one number, one special character, one lower case and one upper case character."
         },
-        "k8sMasterInstanceType": {
+        "ISRepoInstanceType": {
             "AllowedValues": [
-                "t3.micro",
-                "t3.small",
-                "t3.medium",
-                "t3.large",
-                "t3.xlarge"
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge",
+                "m5.12xlarge",
+                "m5.24xlarge",
+                "m5.metal",
+                "m5a.xlarge",
+                "m5a.2xlarge",
+                "m5a.4xlarge",
+                "m5a.12xlarge",
+                "m5a.12xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5.2xlarge",
+                "r5.4xlarge",
+                "r5.12xlarge",
+                "r5.24xlarge",
+                "r5.metal",
+                "r5a.large",
+                "r5a.xlarge",
+                "r5a.2xlarge",
+                "r5a.4xlarge",
+                "r5a.12xlarge",
+                "r5a.24xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "c5.9xlarge",
+                "c5.18xlarge"
             ],
             "ConstraintDescription": "Must contain valid instance type",
-            "Default": "t3.small",
-            "Description": "Type of EC2 instance for the Kubernetes master nodes",
+            "Default": "m5.xlarge",
+            "Description": "Type of EC2 instance for IS Repo Worker instances",
             "Type": "String"
         },
-        "k8sWorkerInstanceType": {
+        "ISEngineInstanceType": {
             "AllowedValues": [
-				"t3.xlarge",
-				"t3.2xlarge",
-				"m5.large",
-				"m5.xlarge",
-				"m5.2xlarge",
-				"m5.4xlarge",
-				"c5.xlarge",
-				"c5.2xlarge",
-				"c5.4xlarge",
-				"c5.9xlarge",
-				"r5.large",
-				"r5.xlarge",
-				"r5.2xlarge",
-				"r5.4xlarge"
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge",
+                "m5.12xlarge",
+                "m5.24xlarge",
+                "m5.metal",
+                "m5a.xlarge",
+                "m5a.2xlarge",
+                "m5a.4xlarge",
+                "m5a.12xlarge",
+                "m5a.12xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5.2xlarge",
+                "r5.4xlarge",
+                "r5.12xlarge",
+                "r5.24xlarge",
+                "r5.metal",
+                "r5a.large",
+                "r5a.xlarge",
+                "r5a.2xlarge",
+                "r5a.4xlarge",
+                "r5a.12xlarge",
+                "r5a.24xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "c5.9xlarge",
+                "c5.18xlarge"
             ],
             "ConstraintDescription": "Must contain valid instance type",
-            "Default": "t3.xlarge",
-            "Description": "Type of EC2 instance for the Kubernetes worker nodes",
+            "Default": "m5.xlarge",
+            "Description": "Type of EC2 instance for IS Engine Worker instances",
             "Type": "String"
         },
         "KeyPairName": {
@@ -229,62 +270,62 @@
             "AllowedPattern": "[a-z0-9]+",
             "ConstraintDescription": "Non-empty; lower case letters and numbers",
             "Default": "ds1",
-            "Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
+            "Description": "This will be used to label AWS resources and the DataStage Kubernetes namespace. Ensure that every InfoSphere DataStage deployment on your AWS account uses a unique Order ID.",
             "Type": "String"
         },
         "PrivateSubnet1CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.0.0/19",
-            "Description": "CIDR block for the private subnet located in Availability Zone 1",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1",
             "Type": "String"
         },
         "PrivateSubnet2CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.32.0/19",
-            "Description": "CIDR block for the private subnet located in Availability Zone 2",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 2",
             "Type": "String"
         },
         "PrivateSubnet3CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.64.0/19",
-            "Description": "CIDR block for the private subnet located in Availability Zone 3",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 3",
             "Type": "String"
         },
         "PublicSubnet1CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.128.0/20",
-            "Description": "CIDR block for the public (DMZ) subnet located in Availability Zone 1",
+            "Description": "The CIDR block for the public subnet located in Availability Zone 1",
             "Type": "String"
         },
         "PublicSubnet2CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.144.0/20",
-            "Description": "CIDR block for the public (DMZ) subnet located in Availability Zone 2",
+            "Description": "The CIDR block for the public subnet located in Availability Zone 2",
             "Type": "String"
         },
         "PublicSubnet3CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.160.0/20",
-            "Description": "CIDR block for the public (DMZ) subnet located in Availability Zone 3",
+            "Description": "The CIDR block for the public subnet located in Availability Zone 3",
             "Type": "String"
         },
         "QSS3BucketName": {
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
-            "Default": "my-bucket",
+            "Default": "aws-quickstart",
             "Description": "S3 bucket name for the Quick Start assets",
             "Type": "String"
         },
         "QSS3KeyPrefix": {
-            "AllowedPattern": "^[0-9a-zA-Z-/]*/$",
+            "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
-            "Default": "/",
+            "Default": "quickstart-ibm-infosphere-datastage/",
             "Description": "S3 key prefix for the Quick Start assets",
             "Type": "String"
         },
@@ -292,7 +333,7 @@
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
             "Default": "10.0.0.0/16",
-            "Description": "CIDR block for the VPC to be created",
+            "Description": "The CIDR block for the VPC to be created",
             "Type": "String"
         }
     },
@@ -331,7 +372,7 @@
             "Properties": {
                 "TemplateURL": {
                     "Fn::Sub": [
-                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/ibm-datastage-vpc.template",
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-aws-vpc/templates/aws-vpc.template",
                         {
                             "QSS3Region": {
                                 "Fn::If": [
@@ -350,16 +391,13 @@
                     "NumberOfAZs": {
                         "Ref": "NumberOfAZs"
                     },
-                    "OrderID": {
-                        "Ref": "OrderID"
-                    },
-                    "PrivateSubnet1CIDR": {
+                    "PrivateSubnet1ACIDR": {
                         "Ref": "PrivateSubnet1CIDR"
                     },
-                    "PrivateSubnet2CIDR": {
+                    "PrivateSubnet2ACIDR": {
                         "Ref": "PrivateSubnet2CIDR"
                     },
-                    "PrivateSubnet3CIDR": {
+                    "PrivateSubnet3ACIDR": {
                         "Ref": "PrivateSubnet3CIDR"
                     },
                     "PublicSubnet1CIDR": {
@@ -378,7 +416,6 @@
             }
         },
         "DataStageStack": {
-            "DependsOn": "VPCStack",
             "Type": "AWS::CloudFormation::Stack",
             "Properties": {
                 "TemplateURL": {
@@ -411,11 +448,11 @@
                     "IISPassword": {
                         "Ref": "IISPassword"
                     },
-                    "k8sMasterInstanceType": {
-                        "Ref": "k8sMasterInstanceType"
+                    "ISRepoInstanceType": {
+                        "Ref": "ISRepoInstanceType"
                     },
-                    "k8sWorkerInstanceType": {
-                        "Ref": "k8sWorkerInstanceType"
+                    "ISEngineInstanceType": {
+                        "Ref": "ISEngineInstanceType"
                     },
                     "KeyPairName": {
                         "Ref": "KeyPairName"
@@ -429,16 +466,45 @@
                     "OrderID": {
                         "Ref": "OrderID"
                     },
+                    "PrivateSubnet1CIDR": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PrivateSubnet1ACIDR"
+                        ]
+                    },
+                    "PrivateSubnet2CIDR": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PrivateSubnet2ACIDR"
+                        ]
+                    },
+                    "PrivateSubnet3CIDR": {
+                        "Fn::If": [
+                            "3AZCondition",
+                            {
+                                "Fn::GetAtt": [
+                                    "VPCStack",
+                                    "Outputs.PrivateSubnet3ACIDR"
+                                ]
+                            },
+                            {
+                                "Fn::GetAtt": [
+                                    "VPCStack",
+                                    "Outputs.PrivateSubnet2ACIDR"
+                                ]
+                            }
+                        ]
+                    },
                     "PrivateSubnet1ID": {
                         "Fn::GetAtt": [
                             "VPCStack",
-                            "Outputs.PrivateSubnet1ID"
+                            "Outputs.PrivateSubnet1AID"
                         ]
                     },
                     "PrivateSubnet2ID": {
                         "Fn::GetAtt": [
                             "VPCStack",
-                            "Outputs.PrivateSubnet2ID"
+                            "Outputs.PrivateSubnet2AID"
                         ]
                     },
                     "PrivateSubnet3ID": {
@@ -447,13 +513,13 @@
                             {
                                 "Fn::GetAtt": [
                                     "VPCStack",
-                                    "Outputs.PrivateSubnet3ID"
+                                    "Outputs.PrivateSubnet3AID"
                                 ]
                             },
                             {
                                 "Fn::GetAtt": [
                                     "VPCStack",
-                                    "Outputs.PrivateSubnet2ID"
+                                    "Outputs.PrivateSubnet2AID"
                                 ]
                             }
                         ]

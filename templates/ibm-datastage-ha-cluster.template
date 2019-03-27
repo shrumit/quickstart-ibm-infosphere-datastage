@@ -2,15 +2,17 @@
 	"AWSTemplateFormatVersion": "2010-09-09",
 	"Description": "Create DataStage InfoSphere Kubernetes nodes. This template creates EC2 instances and related resources. You will be billed for the AWS resources used if you create a stack from this template.",
 	"Parameters": {
-		"AllowedPublicCIDR": {
-			"AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
-			"ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
-			"Description": "The CIDR IP range that is permitted to access the cluster. We recommend that you set this value to a trusted IP range.",
+		"ClusterNodeSecurityGroupID": {
+			"Description": "ID of Cluster Node Security Group",
+			"Type": "AWS::EC2::SecurityGroup::Id"
+		},
+		"DataStageClientFQDN": {
+			"Description": "Private hostname of DS Client instance",
 			"Type": "String"
 		},
-		"DataStageClientSecurityGroupID": {
-			"Description": "DataStage Client Security Group",
-			"Type": "AWS::EC2::SecurityGroup::Id"
+		"DataStageClientPrivateIP": {
+			"Description": "Private IP of DS Client instance",
+			"Type": "String"
 		},
 		"EFSID": {
 			"Description": "ID of the Elastic File System to be mounted to the cluster",
@@ -18,14 +20,11 @@
 		},
 		"IBMClientNumber": {
 			"AllowedPattern": "[0-9]+",
+			"NoEcho": "true",
 			"Description": "ICN associated with your license",
 			"Type": "String"
 		},
 		"IBMPartNumber": {
-			"AllowedValues": [
-				"D1VLALL",
-				"D1P3RLL"
-			],
 			"Description": "Part Number associated with your license",
 			"Type": "String"
 		},
@@ -38,38 +37,79 @@
 			"AllowedPattern": "(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[\\p{Punct}])([0-9a-zA-Z\\p{Punct}]+)",
 			"ConstraintDescription": "Must be 8-20 characters, containing one number, one special character, one lower case and one upper case character."
 		},
-		"k8sMasterInstanceType": {
-			"AllowedValues": [
-				"t3.micro",
-				"t3.small",
-				"t3.medium",
-				"t3.large",
-				"t3.xlarge"
-			],
-			"ConstraintDescription": "Must contain valid instance type",
-			"Default": "t3.medium",
-			"Description": "Type of EC2 instance for the Kubernetes master nodes",
-			"Type": "String"
-		},
-		"k8sWorkerInstanceType": {
+		"ISRepoInstanceType": {
 			"AllowedValues": [
 				"t3.xlarge",
 				"t3.2xlarge",
-				"m5.large",
 				"m5.xlarge",
 				"m5.2xlarge",
 				"m5.4xlarge",
-				"c5.xlarge",
-				"c5.2xlarge",
-				"c5.4xlarge",
-				"c5.9xlarge",
+				"m5.12xlarge",
+				"m5.24xlarge",
+				"m5.metal",
+				"m5a.xlarge",
+				"m5a.2xlarge",
+				"m5a.4xlarge",
+				"m5a.12xlarge",
+				"m5a.12xlarge",
 				"r5.large",
 				"r5.xlarge",
 				"r5.2xlarge",
-				"r5.4xlarge"
+				"r5.4xlarge",
+				"r5.12xlarge",
+				"r5.24xlarge",
+				"r5.metal",
+				"r5a.large",
+				"r5a.xlarge",
+				"r5a.2xlarge",
+				"r5a.4xlarge",
+				"r5a.12xlarge",
+				"r5a.24xlarge",
+				"c5.2xlarge",
+				"c5.4xlarge",
+				"c5.9xlarge",
+				"c5.18xlarge"
 			],
 			"ConstraintDescription": "Must contain valid instance type",
-			"Default": "t3.xlarge",
+			"Default": "m5.xlarge",
+			"Description": "Type of EC2 instance for the Kubernetes master nodes",
+			"Type": "String"
+		},
+		"ISEngineInstanceType": {
+			"AllowedValues": [
+				"t3.xlarge",
+				"t3.2xlarge",
+				"m5.xlarge",
+				"m5.2xlarge",
+				"m5.4xlarge",
+				"m5.12xlarge",
+				"m5.24xlarge",
+				"m5.metal",
+				"m5a.xlarge",
+				"m5a.2xlarge",
+				"m5a.4xlarge",
+				"m5a.12xlarge",
+				"m5a.12xlarge",
+				"r5.large",
+				"r5.xlarge",
+				"r5.2xlarge",
+				"r5.4xlarge",
+				"r5.12xlarge",
+				"r5.24xlarge",
+				"r5.metal",
+				"r5a.large",
+				"r5a.xlarge",
+				"r5a.2xlarge",
+				"r5a.4xlarge",
+				"r5a.12xlarge",
+				"r5a.24xlarge",
+				"c5.2xlarge",
+				"c5.4xlarge",
+				"c5.9xlarge",
+				"c5.18xlarge"
+			],
+			"ConstraintDescription": "Must contain valid instance type",
+			"Default": "m5.xlarge",
 			"Description": "Type of EC2 instance for the Kubernetes worker nodes",
 			"Type": "String"
 		},
@@ -86,15 +126,9 @@
 				"-"
 			]
 		},
-		"MasterNLB": {
-			"Description": "Amazon Resource Name of Kubernetes load balancer for Master instance proxy",
-			"Default": "arn:aws:elasticloadbalancing:ap-southeast-1:299743145002:loadbalancer/net/dsclient-master/ffab39eb067d208e",
-			"Type": "String"
-		},
-		"MasterNLBDomainName": {
-			"Description": "Amazon Resource Name of Kubernetes load balancer",
-			"Default": "dsclient-master-ffab39eb067d208e.elb.ap-southeast-1.amazonaws.com",
-			"Type": "String"
+		"MasterNodeAddonSecurityGroupID": {
+			"Description": "ID of Master Node Addon Security Group",
+			"Type": "AWS::EC2::SecurityGroup::Id"
 		},
 		"NumberOfAZs": {
 			"AllowedValues": [
@@ -108,7 +142,6 @@
 		"OrderID": {
 			"AllowedPattern": "[a-z0-9]+",
 			"ConstraintDescription": "Non-empty; lower case letters and numbers",
-			"Default": "ds1",
 			"Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
 			"Type": "String"
 		},
@@ -124,6 +157,22 @@
 			"Description": "ID of private subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
 			"Type": "AWS::EC2::Subnet::Id"
 		},
+		"ProxyNLB": {
+			"Description": "Amazon Resource Name of NLB for proxying Launchpad from AllowedPublicCIDR",
+			"Type": "String"
+		},
+		"QSS3BucketName": {
+			"AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+			"ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+			"Description": "S3 bucket name for the Quick Start assets",
+			"Type": "String"
+		},
+		"QSS3KeyPrefix": {
+			"AllowedPattern": "^[0-9a-zA-Z-/]*$",
+			"ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+			"Description": "S3 key prefix for the Quick Start assets",
+			"Type": "String"
+		},
 		"VPCID": {
 			"Description": "ID of your existing VPC for deployment",
 			"Type": "AWS::EC2::VPC::Id"
@@ -131,8 +180,9 @@
 	},
 	"Conditions": {
 		"3AZCondition": {
-			"Fn::Equals": [
-				{ "Ref": "NumberOfAZs" },
+			"Fn::Equals": [{
+					"Ref": "NumberOfAZs"
+				},
 				"3"
 			]
 		}
@@ -171,7 +221,7 @@
 		}
 	},
 	"Resources": {
-		"k8sMasterRole": {
+		"ClusterNodeRole": {
 			"Type": "AWS::IAM::Role",
 			"Properties": {
 				"AssumeRolePolicyDocument": {
@@ -208,120 +258,50 @@
 						"PolicyDocument": {
 							"Version": "2012-10-17",
 							"Statement": [{
-								"Action": [
-									"s3:GetObject",
-									"s3:PutObject",
-									"s3:ListBucket"
-								],
-								"Resource": [
-									{ "Fn::Sub": "arn:aws:s3:::datastage-backup/*" },
-									{ "Fn::Sub": "arn:aws:s3:::datastage-backup" }
-								],
-								"Effect": "Allow"
+								"Action": "ec2:ModifyInstanceAttribute",
+								"Effect": "Allow",
+								"Resource": "*"
 							}]
 						},
-						"PolicyName": { "Fn::Sub": "${OrderID}-S3GetPut" }
+						"PolicyName": { "Fn::Sub": "${OrderID}-ModifyInstanceAttribute" }
 					}
 				]
 			}
 		},
-		"k8sMasterProfile": {
+		"ClusterNodeProfile": {
 			"Type": "AWS::IAM::InstanceProfile",
 			"Properties": {
 				"Path": "/",
 				"Roles": [
-					{ "Ref": "k8sMasterRole" }
+					{ "Ref": "ClusterNodeRole" }
 				]
 			}
 		},
-		"k8sMasterSecurityGroup": {
-			"Type": "AWS::EC2::SecurityGroup",
+		"WaitHandle": {
+			"Type": "AWS::CloudFormation::WaitConditionHandle",
+			"Properties": {}
+		},
+		"WaitCondition": {
+			"Type": "AWS::CloudFormation::WaitCondition",
+			"DependsOn": "K8sMaster1Instance",
 			"Properties": {
-				"GroupDescription": "Allow access to the DataStage Server instances",
-				"VpcId": {
-					"Ref": "VPCID"
-				},
-				"SecurityGroupIngress": [
-					{ "IpProtocol": "tcp", "FromPort": 32500, "ToPort": 32500, "CidrIp": { "Ref": "AllowedPublicCIDR" } },
-					{ "IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "CidrIp": { "Ref": "AllowedPublicCIDR" } },
-					{ "IpProtocol": "tcp", "FromPort": 32500, "ToPort": 32500, "SourceSecurityGroupId": { "Ref": "DataStageClientSecurityGroupID" } },
-					{ "IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "SourceSecurityGroupId": { "Ref": "DataStageClientSecurityGroupID" } }
-				]
+				"Handle": { "Ref": "WaitHandle" },
+				"Timeout": "6000"
 			}
 		},
-		"k8sMasterSGIngress1": {
-			"Type": "AWS::EC2::SecurityGroupIngress",
-			"Properties": {
-				"GroupId": { "Ref": "k8sMasterSecurityGroup" },
-				"IpProtocol": "-1",
-				"SourceSecurityGroupId": { "Ref": "k8sMasterSecurityGroup" }
-			}
-		},
-		"k8sMasterSGIngress2": {
-			"Type": "AWS::EC2::SecurityGroupIngress",
-			"Properties": {
-				"GroupId": { "Ref": "k8sMasterSecurityGroup" },
-				"IpProtocol": "-1",
-				"SourceSecurityGroupId": { "Ref": "k8sWorkerSecurityGroup" }
-			}
-		},
-		"k8sWorkerSecurityGroup": {
-			"Type": "AWS::EC2::SecurityGroup",
-			"Properties": {
-				"GroupDescription": "Allow access to the DataStage Server instances",
-				"VpcId": {
-					"Ref": "VPCID"
-				}
-			}
-		},
-        "k8sWorkerSGIngress1": {
-			"Type": "AWS::EC2::SecurityGroupIngress",
-			"Properties": {
-				"GroupId": { "Ref": "k8sWorkerSecurityGroup" },
-				"IpProtocol": "-1",
-				"SourceSecurityGroupId": { "Ref": "k8sWorkerSecurityGroup" }
-			}
-		},
-        "k8sWorkerSGIngress2": {
-			"Type": "AWS::EC2::SecurityGroupIngress",
-			"Properties": {
-				"GroupId": { "Ref": "k8sWorkerSecurityGroup" },
-				"IpProtocol": "-1",
-				"SourceSecurityGroupId": { "Ref": "k8sMasterSecurityGroup" }
-			}
-		},
-		"k8sMaster1Instance": {
+		"K8sMaster1Instance": {
 			"Type": "AWS::EC2::Instance",
 			"Properties": {
-				"BlockDeviceMappings": [{
-					"DeviceName": "/dev/sda1",
-					"Ebs": {
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}, {
-					"DeviceName": "/dev/sdf",
-					"Ebs": {
-						"Encrypted": "true",
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}],
-				"IamInstanceProfile": { "Ref": "k8sMasterProfile" },
-				"InstanceType": { "Ref": "k8sMasterInstanceType" },
-				"SecurityGroupIds": [
-					{ "Ref": "k8sMasterSecurityGroup" }
-				],
-				"SubnetId": { "Ref": "PrivateSubnet1ID" },
 				"LaunchTemplate": {
-					"LaunchTemplateId": { "Ref": "CommonLaunchTemplate" },
-					"Version": { "Fn::GetAtt": ["CommonLaunchTemplate", "DefaultVersionNumber"] }
+					"LaunchTemplateId": { "Ref": "MasterLaunchTemplate" },
+					"Version": { "Fn::GetAtt": ["MasterLaunchTemplate", "DefaultVersionNumber"] }
 				},
+				"SourceDestCheck": false,
+				"SubnetId": { "Ref": "PrivateSubnet1ID" },
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-k8s-master1" }
+					"Value": { "Fn::Sub": "${OrderID}-K8s-Master-1" }
 				}],
-				"SourceDestCheck": "false",
 				"UserData": {
 					"Fn::Base64": {
 						"Fn::Join": [
@@ -330,7 +310,7 @@
 								"#!/bin/bash\n",
 								"\n",
 								"# Master index is hard-coded here \n",
-								"echo '1' > /var/MASTER_IDX \n",
+								"echo 'master1' > /var/instance_prefix \n",
 								"\n",
 								"# Install aws-cfn \n",
 								"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
@@ -340,52 +320,35 @@
 								"\n",
 								"/opt/aws/bin/cfn-init",
 								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource CommonLaunchTemplate",
+								" --resource MasterLaunchTemplate",
 								" --configsets primaryMaster",
 								" --region ", { "Ref": "AWS::Region" }, "\n",
 								"\n",
 								"/opt/aws/bin/cfn-signal -e $? ",
-								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource k8sMaster1Instance ",
-								" --region ", { "Ref": "AWS::Region" }, "\n"
+								{ "Fn::Base64": { "Ref": "WaitHandle" } }, "\n",
+								"#/opt/aws/bin/cfn-signal -e $? ",
+								"# --stack ", { "Ref": "AWS::StackName" },
+								"# --resource K8sMaster1Instance ",
+								"# --region ", { "Ref": "AWS::Region" }, "\n"
 							]
 						]
 					}
 				}
 			}
 		},
-		"k8sMaster2Instance": {
+		"K8sMaster2Instance": {
 			"Type": "AWS::EC2::Instance",
 			"Properties": {
-				"BlockDeviceMappings": [{
-					"DeviceName": "/dev/sda1",
-					"Ebs": {
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}, {
-					"DeviceName": "/dev/sdf",
-					"Ebs": {
-						"Encrypted": "true",
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}],
-				"IamInstanceProfile": { "Ref": "k8sMasterProfile" },
-				"InstanceType": { "Ref": "k8sMasterInstanceType" },
-				"SecurityGroupIds": [
-					{ "Ref": "k8sMasterSecurityGroup" }
-				],
+				"LaunchTemplate": {
+					"LaunchTemplateId": { "Ref": "MasterLaunchTemplate" },
+					"Version": { "Fn::GetAtt": ["MasterLaunchTemplate", "DefaultVersionNumber"] }
+				},
+				"SourceDestCheck": false,
 				"SubnetId": { "Ref": "PrivateSubnet2ID" },
-				"LaunchTemplate": {
-					"LaunchTemplateId": { "Ref": "CommonLaunchTemplate" },
-					"Version": { "Fn::GetAtt": ["CommonLaunchTemplate", "DefaultVersionNumber"] }
-				},
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-k8s-master2" }
+					"Value": { "Fn::Sub": "${OrderID}-K8s-Master-2" }
 				}],
-				"SourceDestCheck": "false",
 				"UserData": {
 					"Fn::Base64": {
 						"Fn::Join": [
@@ -394,7 +357,7 @@
 								"#!/bin/bash\n",
 								"\n",
 								"# Master index is hard-coded here \n",
-								"echo '2' > /var/MASTER_IDX \n",
+								"echo 'master2' > /var/instance_prefix \n",
 								"\n",
 								"# Install aws-cfn \n",
 								"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
@@ -404,13 +367,13 @@
 								"\n",
 								"/opt/aws/bin/cfn-init",
 								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource CommonLaunchTemplate",
+								" --resource MasterLaunchTemplate",
 								" --configsets secondaryMaster",
 								" --region ", { "Ref": "AWS::Region" }, "\n",
 								"\n",
 								"/opt/aws/bin/cfn-signal -e $? ",
 								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource k8sMaster2Instance ",
+								" --resource K8sMaster2Instance ",
 								" --region ", { "Ref": "AWS::Region" }, "\n"
 							]
 						]
@@ -418,38 +381,19 @@
 				}
 			}
 		},
-		"k8sMaster3Instance": {
+		"K8sMaster3Instance": {
 			"Type": "AWS::EC2::Instance",
 			"Properties": {
-				"BlockDeviceMappings": [{
-					"DeviceName": "/dev/sda1",
-					"Ebs": {
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}, {
-					"DeviceName": "/dev/sdf",
-					"Ebs": {
-						"Encrypted": "true",
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}],
-				"IamInstanceProfile": { "Ref": "k8sMasterProfile" },
-				"InstanceType": { "Ref": "k8sMasterInstanceType" },
-				"SecurityGroupIds": [
-					{ "Ref": "k8sMasterSecurityGroup" }
-				],
+				"LaunchTemplate": {
+					"LaunchTemplateId": { "Ref": "MasterLaunchTemplate" },
+					"Version": { "Fn::GetAtt": ["MasterLaunchTemplate", "DefaultVersionNumber"] }
+				},
+				"SourceDestCheck": false,
 				"SubnetId": { "Ref": "PrivateSubnet3ID" },
-				"LaunchTemplate": {
-					"LaunchTemplateId": { "Ref": "CommonLaunchTemplate" },
-					"Version": { "Fn::GetAtt": ["CommonLaunchTemplate", "DefaultVersionNumber"] }
-				},
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-k8s-master3" }
+					"Value": { "Fn::Sub": "${OrderID}-K8s-Master-3" }
 				}],
-				"SourceDestCheck": "false",
 				"UserData": {
 					"Fn::Base64": {
 						"Fn::Join": [
@@ -458,7 +402,7 @@
 								"#!/bin/bash\n",
 								"\n",
 								"# Master index is hard-coded here \n",
-								"echo '3' > /var/MASTER_IDX \n",
+								"echo 'master3' > /var/instance_prefix \n",
 								"\n",
 								"# Install aws-cfn \n",
 								"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
@@ -468,13 +412,13 @@
 								"\n",
 								"/opt/aws/bin/cfn-init",
 								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource CommonLaunchTemplate",
+								" --resource MasterLaunchTemplate",
 								" --configsets secondaryMaster",
 								" --region ", { "Ref": "AWS::Region" }, "\n",
 								"\n",
 								"/opt/aws/bin/cfn-signal -e $? ",
 								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource k8sMaster2Instance ",
+								" --resource K8sMaster3Instance ",
 								" --region ", { "Ref": "AWS::Region" }, "\n"
 							]
 						]
@@ -482,182 +426,33 @@
 				}
 			}
 		},
-		"k8sWorker1Instance": {
-			"Type": "AWS::EC2::Instance",
-			"Properties": {
-				"BlockDeviceMappings": [{
-					"DeviceName": "/dev/sda1",
-					"Ebs": {
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}, {
-					"DeviceName": "/dev/sdf",
-					"Ebs": {
-						"Encrypted": "true",
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}],
-				"IamInstanceProfile": { "Ref": "k8sMasterProfile" },
-				"InstanceType": { "Ref": "k8sWorkerInstanceType" },
-				"SecurityGroupIds": [
-					{ "Ref": "k8sWorkerSecurityGroup" }
-				],
-				"SubnetId": { "Ref": "PrivateSubnet1ID" },
-				"LaunchTemplate": {
-					"LaunchTemplateId": { "Ref": "CommonLaunchTemplate" },
-					"Version": { "Fn::GetAtt": ["CommonLaunchTemplate", "DefaultVersionNumber"] }
-				},
-				"Tags": [{
-						"Key": "Name",
-						"Value": { "Fn::Sub": "${OrderID}-k8s-worker1" }
-					},
-					{
-						"Key": "WorkerNumber",
-						"Value": "1"
-					}
-				],
-				"SourceDestCheck": "false",
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": [
-							"",
-							[
-								"#!/bin/bash\n",
-								"\n",
-								"# Install aws-cfn \n",
-								"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
-								"curl -O https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
-								"yum install -y aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
-								"export PYTHONPATH=${PYTHONPATH}:/usr/local/lib/python2.7/site-packages\n",
-								"\n",
-								"/opt/aws/bin/cfn-init",
-								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource CommonLaunchTemplate",
-								" --configsets worker",
-								" --region ", { "Ref": "AWS::Region" }, "\n",
-								"\n",
-								"/opt/aws/bin/cfn-signal -e $? ",
-								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource k8sWorker1Instance ",
-								" --region ", { "Ref": "AWS::Region" }, "\n"
-							]
-						]
-					}
-				}
-			}
-		},
-		"k8sWorker2Instance": {
-			"Type": "AWS::EC2::Instance",
-			"Properties": {
-				"BlockDeviceMappings": [{
-					"DeviceName": "/dev/sda1",
-					"Ebs": {
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}, {
-					"DeviceName": "/dev/sdf",
-					"Ebs": {
-						"Encrypted": "true",
-						"VolumeSize": "110",
-						"VolumeType": "gp2"
-					}
-				}],
-				"IamInstanceProfile": { "Ref": "k8sMasterProfile" },
-				"InstanceType": { "Ref": "k8sWorkerInstanceType" },
-				"SecurityGroupIds": [
-					{ "Ref": "k8sWorkerSecurityGroup" }
-				],
-				"SubnetId": { "Ref": "PrivateSubnet1ID" },
-				"LaunchTemplate": {
-					"LaunchTemplateId": { "Ref": "CommonLaunchTemplate" },
-					"Version": { "Fn::GetAtt": ["CommonLaunchTemplate", "DefaultVersionNumber"] }
-				},
-				"Tags": [{
-						"Key": "Name",
-						"Value": { "Fn::Sub": "${OrderID}-k8s-worker2" }
-					},
-					{
-						"Key": "WorkerNumber",
-						"Value": "2"
-					}
-				],
-				"SourceDestCheck": "false",
-				"UserData": {
-					"Fn::Base64": {
-						"Fn::Join": [
-							"",
-							[
-								"#!/bin/bash\n",
-								"\n",
-								"# Install aws-cfn \n",
-								"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
-								"curl -O https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
-								"yum install -y aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
-								"export PYTHONPATH=${PYTHONPATH}:/usr/local/lib/python2.7/site-packages\n",
-								"\n",
-								"/opt/aws/bin/cfn-init",
-								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource CommonLaunchTemplate",
-								" --configsets worker",
-								" --region ", { "Ref": "AWS::Region" }, "\n",
-								"\n",
-								"/opt/aws/bin/cfn-signal -e $? ",
-								" --stack ", { "Ref": "AWS::StackName" },
-								" --resource k8sWorker2Instance ",
-								" --region ", { "Ref": "AWS::Region" }, "\n"
-							]
-						]
-					}
-				}
-			}
-		},
-		"CommonLaunchTemplate": {
+		"MasterLaunchTemplate": {
 			"Type": "AWS::EC2::LaunchTemplate",
 			"Metadata": {
 				"AWS::CloudFormation::Init": {
 					"configSets": {
-						"primaryMaster": ["install_common_packages", "install_master_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_master", "update_datastageinfo", "download_installer", "install_datastage"],
-						"secondaryMaster": ["install_common_packages", "install_master_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_worker", "download_installer"],
-						"worker": ["install_common_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_worker"]
+						"primaryMaster": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_primary", "store_ip_hn", "update_datastageinfo", "download_installer", "install_datastage", "new_worker_listener_files", "enable_nwl_service"],
+						"secondaryMaster": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_secondary", "store_ip_hn", "update_datastageinfo", "download_installer", "new_worker_listener_files"]
 					},
-					"install_common_packages": {
-						"packages": {
-							"yum": {
-								"nano": [],
-								"nfs-utils": [],
-								"nmap-ncat": []
-							}
-						}
-					},
-					"install_master_packages": {
+					"install_packages": {
 						"packages": {
 							"yum": {
 								"bind-utils": [],
-								"wget": [],
 								"firewalld": [],
-								"redhat-lsb-core": [],
+								"jq": [],
+								"nano": [],
 								"net-tools": [],
-								"jq": []
+								"nfs-utils": [],
+								"nmap-ncat": [],
+								"redhat-lsb-core": [],
+								"wget": []
 							}
 						}
 					},
 					"mount_ebs": {
 						"files": {
 							"/tmp/mount_ebs.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash -e \n",
-										"# CURRENTLY ONLY WORKS WITH NVME-EBS INSTANCE TYPES \n",
-										"mkdir /disk1\n",
-										"mkfs -t xfs /dev/nvme1n1\n",
-										"mount /dev/nvme1n1 /disk1\n",
-										"UUID=$(blkid /dev/nvme1n1 -s UUID -o value)\n",
-										"echo \"UUID=$UUID  /disk1  xfs  defaults,nofail  0  2\" >> /etc/fstab \n"
-									]]
-								},
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_ebs.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
@@ -672,16 +467,7 @@
 					"mount_efs": {
 						"files": {
 							"/tmp/mount_efs.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash -e \n",
-										"mkdir -p /efs\n",
-										{ "Fn::Sub": "mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFSID}.efs.${AWS::Region}.amazonaws.com:/ /efs\n" },
-										{ "Fn::Sub": "echo '${EFSID}.efs.${AWS::Region}.amazonaws.com:/  /efs  nfs4  nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev  0  0' >> /etc/fstab\n" },
-										"mount --bind /efs /mnt \n",
-										"echo '/efs  /mnt  none  bind' >> /etc/fstab\n"
-									]]
-								},
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_efs.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
@@ -689,31 +475,25 @@
 						},
 						"commands": {
 							"0": {
-								"command": "/tmp/mount_efs.sh"
+								"command": { "Fn::Sub": "/tmp/mount_efs.sh ${AWS::Region} ${EFSID}" }
 							}
 						}
 					},
 					"install_aws_cli": {
 						"files": {
 							"/tmp/install_aws_cli.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash \n",
-										"# install AWS CLI\n",
-										"cd /tmp\n",
-										"yum install -y unzip\n",
-										"curl 'https://s3.amazonaws.com/aws-cli/awscli-bundle.zip' -o 'awscli-bundle.zip'\n",
-										"unzip awscli-bundle.zip\n",
-										"./awscli-bundle/install -i /usr/aws -b /usr/bin/aws\n",
-										"mkdir -p /root/.aws/\n",
-										"echo '[default]' > /root/.aws/config\n",
-										{ "Fn::Sub": "echo 'region = ${AWS::Region}' >> /root/.aws/config \n" },
-										"\n"
-									]]
-								},
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/install_aws_cli.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
+							},
+							"/root/.aws/config": {
+								"content": {
+									"Fn::Join": ["", [
+										"[default]\n",
+										{ "Fn::Sub": "region = ${AWS::Region}\n" }
+									]]
+								}
 							}
 						},
 						"commands": {
@@ -723,20 +503,11 @@
 							}
 						}
 					},
-					"set_passwordless_master": {
+
+					"set_passwordless_primary": {
 						"files": {
-							"/tmp/passwordless_master.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash -e \n",
-										"# Produce RSA key, append to authorized_keys and put in Parameter Store\n",
-										"yes y | ssh-keygen -q -f /root/.ssh/id_rsa -N '' > /dev/null \n",
-										"cp /root/.ssh/authorized_keys /root/.ssh/authorized_keys.orig \n",
-										"cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys \n",
-										"systemctl restart sshd \n",
-										{ "Fn::Sub": "aws ssm put-parameter --name /${OrderID}/master_rsa --type SecureString --value \"$(cat /root/.ssh/id_rsa.pub)\" \n" }
-									]]
-								},
+							"/tmp/pwless_primary_master.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_primary_master.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
@@ -744,21 +515,14 @@
 						},
 						"commands": {
 							"0": {
-								"command": "/tmp/passwordless_master.sh"
+								"command": { "Fn::Sub": "/tmp/pwless_primary_master.sh ${OrderID}" }
 							}
 						}
 					},
-					"set_passwordless_worker": {
+					"set_passwordless_secondary": {
 						"files": {
-							"/tmp/passwordless_worker.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash -e \n",
-										"# Retrieve RSA key and append to authorized_keys\n",
-										{ "Fn::Sub": "while ! aws ssm get-parameter --name /${OrderID}/master_rsa --with-decryption --query Parameter.Value --output text >> /root/.ssh/authorized_keys; do sleep 5; done \n" },
-										"systemctl restart sshd \n"
-									]]
-								},
+							"/tmp/pwless_secondary_master.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_secondary_master.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
@@ -766,7 +530,22 @@
 						},
 						"commands": {
 							"0": {
-								"command": "/tmp/passwordless_worker.sh"
+								"command": { "Fn::Sub": "/tmp/pwless_secondary_master.sh ${OrderID}" }
+							}
+						}
+					},
+					"store_ip_hn": {
+						"files": {
+							"/tmp/store_ip_hn.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/store_ip_hn.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": { "Fn::Sub": "/tmp/store_ip_hn.sh ${OrderID}" }
 							}
 						}
 					},
@@ -809,41 +588,27 @@
 											"label": "is-engine",
 											"name": "<worker-host3-fqdn>"
 										}
-									]
+									],
+									"clientHosts": [{
+										"privateIP": "",
+										"name": ""
+									}]
+								}
+							},
+							"/disk1/quickstart/nodes_partial.json": {
+								"content": {
+									"masterNodeHost": "",
+									"workerNodeHost": [{
+										"label": "",
+										"name": ""
+									}],
+									"distributedFileSystemType": "nfs",
+									"distributedDataDir": "/efs",
+									"distributedFileServer": ""
 								}
 							},
 							"/tmp/datastageinfo_updater.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash -e \n",
-										{ "Fn::Sub": "NLB=${MasterNLBDomainName}\n" },
-										"NLB=$(echo $NLB | tr '[:upper:]' '[:lower:]')\n",
-										"MASTER1=$(curl -s http://169.254.169.254/latest/meta-data/local-hostname)\n",
-										"MASTER1_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)\n",
-										{ "Fn::Sub": "while ! MASTER2=$(aws ssm get-parameter --name /${OrderID}/master2_fqdn --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! MASTER2_IP=$(aws ssm get-parameter --name /${OrderID}/master2_ip --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! MASTER3=$(aws ssm get-parameter --name /${OrderID}/master3_fqdn --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! MASTER3_IP=$(aws ssm get-parameter --name /${OrderID}/master3_ip --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! WORKER1=$(aws ssm get-parameter --name /${OrderID}/worker1_fqdn --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! WORKER1_IP=$(aws ssm get-parameter --name /${OrderID}/worker1_ip --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! WORKER2=$(aws ssm get-parameter --name /${OrderID}/worker2_fqdn --query Parameter.Value --output text); do sleep 5; done \n" },
-										{ "Fn::Sub": "while ! WORKER2_IP=$(aws ssm get-parameter --name /${OrderID}/worker2_ip --query Parameter.Value --output text); do sleep 5; done \n" },
-										"cat /disk1/quickstart/datastageinfo_partial.json             |",
-										" jq \".distributedFileServer=\\\"$MASTER1\\\"\"            |",
-										" jq \".loadBalancerIP=\\\"$NLB\\\"\"            |",
-										" jq \".masterNodeHosts[0].name=\\\"$MASTER3\\\"\"          |",
-										" jq \".masterNodeHosts[0].privateIP=\\\"$MASTER3_IP\\\"\"  |",
-										" jq \".masterNodeHosts[1].name=\\\"$MASTER2\\\"\"          |",
-										" jq \".masterNodeHosts[1].privateIP=\\\"$MASTER2_IP\\\"\"  |",
-										" jq \".masterNodeHosts[2].name=\\\"$MASTER1\\\"\"          |",
-										" jq \".masterNodeHosts[2].privateIP=\\\"$MASTER1_IP\\\"\"  |",
-										" jq \".workerNodeHosts[0].name=\\\"$WORKER1\\\"\"          |",
-										" jq \".workerNodeHosts[0].privateIP=\\\"$WORKER1_IP\\\"\"  |",
-										" jq \".workerNodeHosts[1].name=\\\"$WORKER2\\\"\"          |",
-										" jq \".workerNodeHosts[1].privateIP=\\\"$WORKER2_IP\\\"\"  |",
-										" jq . > /disk1/quickstart/datastageinfo.json \n"
-									]]
-								},
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/datastageinfo_updater.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
@@ -851,39 +616,14 @@
 						},
 						"commands": {
 							"0": {
-								"command": "/tmp/datastageinfo_updater.sh"
+								"command": { "Fn::Sub": "/tmp/datastageinfo_updater.sh ${DataStageClientFQDN} ${DataStageClientPrivateIP} ${MasterNLB.DNSName} ${OrderID}" }
 							}
 						}
 					},
 					"download_installer": {
 						"files": {
 							"/tmp/download_installer.sh": {
-								"content": {
-									"Fn::Join": ["", [
-										"#!/bin/bash \n",
-										{ "Fn::Sub": "while ! RESPONSE=\"$(curl -s --fail -d \"{\\\"icn\\\":\\\"$1\\\", \\\"part_number\\\":\\\"$2\\\", \\\"region\\\":\\\"${AWS::Region}\\\"}\" -H 'Content-Type: application/json' -X POST https://onpd230guk.execute-api.ca-central-1.amazonaws.com/default/microservice/)\"; do sleep 5; done \n" },
-										"echo $RESPONSE > /tmp/api_response.txt \n",
-										"DIRPATH=/disk1/quickstart/installer\n",
-										"mkdir -p $DIRPATH\n",
-										"N_FILES=$(echo $RESPONSE | jq '.assets | length')\n",
-										"for ((i = 0 ; i < N_FILES ; i++ )); do \n",
-										"  echo $RESPONSE | jq -r \".assets[$i] | \\\"$DIRPATH/\\\" + .key + \\\" \\\" + .url\"  | xargs -n 2 bash -c 'curl -s -o $0 $1' & \n",
-										"  PIDS[$i]=$! \n",
-										"done \n",
-										"for PID in ${PIDS[*]}; do \n",
-										"  wait $PID\n",
-										"done\n",
-										"# chmod +x $DIRPATH/install_script.sh\n",
-										"if [ ! -f $DIRPATH/ds-docker-11.7.0.2-1.0.tar.gz ]; then\n",
-										"  mv $DIRPATH/ds-docker-11.7.0.2-1.0*.tar.gz $DIRPATH/ds-docker-11.7.0.2-1.0.tar.gz\n",
-										"fi\n",
-										"if [ ! -f $DIRPATH/DS-Kube-Installer-11.7.tar.gz ]; then\n",
-										"  mv $DIRPATH/DS-Kube-Installer-11.7*.tar.gz $DIRPATH/DS-Kube-Installer-11.7.tar.gz\n",
-										"fi\n",
-										"cd $DIRPATH\n",
-										"tar -xzf DS-Kube-Installer-11.7.tar.gz\n"
-									]]
-								},
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/download_installer.sh" },
 								"mode": "000744",
 								"owner": "root",
 								"group": "root"
@@ -891,7 +631,7 @@
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMClientNumber} ${IBMPartNumber}" },
+								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMClientNumber} ${IBMPartNumber} ${AWS::Region}" },
 								"env": { "HOME": "/root" }
 							}
 						}
@@ -902,12 +642,16 @@
 								"content": {
 									"Fn::Join": ["", [
 										"#!/bin/bash -e \n",
+										"set -x \n",
 										"export HOSTNAME=$(curl -s http://169.254.169.254/latest/meta-data/local-hostname)\n",
 										"env > /cfn-env.txt\n",
 										"mv $1/datastageinfo.json $1/datastageinfo.json.orig \n",
+										"mv $1/nodes.json $1/nodes.json.orig \n",
 										"cp $2 $1 \n",
+										"cp $3 $1 \n",
 										"cd $1\n",
-										"#./deployMultiNode.sh &> ./install_log \n"
+										"./deployMultiNode.sh &> ./install_log \n",
+										"if [ $? -eq 0 ]; then sleep 45m; else return 1; fi  # sleep is necessary for containers to finish initialization\n"
 									]]
 								},
 								"mode": "000744",
@@ -917,22 +661,75 @@
 						},
 						"commands": {
 							"0": {
-								"command": "/tmp/install_script.sh /disk1/quickstart/installer/DS-Kube-Installer /disk1/quickstart/datastageinfo.json",
+								"command": "/tmp/install_script.sh /disk1/quickstart/installer/DS-Kube-Installer /disk1/quickstart/datastageinfo.json /disk1/quickstart/nodes.json",
 								"env": { "HOME": "/root", "PATH": "/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin", "SHELL": "/bin/bash", "USER": "root", "USERNAME": "root" }
+							}
+						}
+					},
+					"new_worker_listener_files": {
+						"files": {
+							"/disk1/quickstart/new_worker_listener.py": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new_worker_listener.py" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							},
+							"/etc/systemd/system/new-worker-listener.service": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new-worker-listener.service" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						}
+					},
+					"enable_nwl_service": {
+						"files": {
+							"/tmp/enable_nwl_service.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/enable_nwl_service.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": { "Fn::Sub": "/tmp/enable_nwl_service.sh ${OrderID}" }
 							}
 						}
 					}
 				}
 			},
 			"Properties": {
-				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-CommonLT" },
+				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-MasterLT" },
 				"LaunchTemplateData": {
+					"BlockDeviceMappings": [{
+						"DeviceName": "/dev/sda1",
+						"Ebs": {
+							"VolumeSize": 110,
+							"VolumeType": "gp2"
+						}
+					}, {
+						"DeviceName": "/dev/sdf",
+						"Ebs": {
+							"Encrypted": true,
+							"VolumeSize": 110,
+							"VolumeType": "gp2"
+						}
+					}],
+					"IamInstanceProfile": {
+						"Arn": { "Fn::GetAtt": ["ClusterNodeProfile", "Arn"] }
+					},
+					"InstanceType": "t3.medium",
 					"ImageId": {
 						"Fn::FindInMap": [
 							"AWSAMIRegionMap", { "Ref": "AWS::Region" }, "RHEL75HVM"
 						]
 					},
 					"KeyName": { "Ref": "KeyPairName" },
+					"SecurityGroupIds": [
+						{ "Ref": "ClusterNodeSecurityGroupID" },
+						{ "Ref": "MasterNodeAddonSecurityGroupID" }
+					],
 					"UserData": {
 						"Fn::Base64": {
 							"Fn::Join": [
@@ -953,24 +750,344 @@
 				}
 			}
 		},
+		"ISRepoLaunchTemplate": {
+			"Type": "AWS::EC2::LaunchTemplate",
+			"Metadata": {
+				"AWS::CloudFormation::Init": {
+					"configSets": {
+						"worker": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_worker", "store_ip_hn", "disable_sourcedest_check", "register_new_worker"]
+					},
+					"install_packages": {
+						"packages": {
+							"yum": {
+								"bind-utils": [],
+								"firewalld": [],
+								"jq": [],
+								"nano": [],
+								"net-tools": [],
+								"nfs-utils": [],
+								"nmap-ncat": [],
+								"redhat-lsb-core": [],
+								"wget": []
+							}
+						}
+					},
+					"mount_ebs": {
+						"files": {
+							"/tmp/mount_ebs.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_ebs.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": "/tmp/mount_ebs.sh"
+							}
+						}
+					},
+					"mount_efs": {
+						"files": {
+							"/tmp/mount_efs.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_efs.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": { "Fn::Sub": "/tmp/mount_efs.sh ${AWS::Region} ${EFSID}" }
+							}
+						}
+					},
+					"install_aws_cli": {
+						"files": {
+							"/tmp/install_aws_cli.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/install_aws_cli.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							},
+							"/root/.aws/config": {
+								"content": {
+									"Fn::Join": ["", [
+										"[default]\n",
+										{ "Fn::Sub": "region = ${AWS::Region}\n" }
+									]]
+								}
+							}
+						},
+						"commands": {
+							"0": {
+								"command": "/tmp/install_aws_cli.sh",
+								"cwd": "/tmp"
+							}
+						}
+					},
+					"set_passwordless_worker": {
+						"files": {
+							"/tmp/pwless_worker.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_worker.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": { "Fn::Sub": "/tmp/pwless_worker.sh ${OrderID}" }
+							}
+						}
+					},
+					"store_ip_hn": {
+						"files": {
+							"/tmp/store_ip_hn.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/store_ip_hn.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": { "Fn::Sub": "/tmp/store_ip_hn.sh ${OrderID}" }
+							}
+						}
+					},
+					"disable_sourcedest_check": {
+						"files": {
+							"/tmp/disable_sourcedest_check.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/disable_sourcedest_check.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						},
+						"commands": {
+							"0": {
+								"command": "/tmp/disable_sourcedest_check.sh"
+							}
+						}
+					},
+					"register_new_worker": {
+						"files": {
+							"/tmp/register_new_worker.sh": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/register_new_worker.sh" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root"
+							}
+						}
+					}
+				}
+			},
+			"Properties": {
+				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-ISRepo-LT" },
+				"LaunchTemplateData": {
+					"BlockDeviceMappings": [{
+						"DeviceName": "/dev/sda1",
+						"Ebs": {
+							"VolumeSize": 110,
+							"VolumeType": "gp2"
+						}
+					}, {
+						"DeviceName": "/dev/sdf",
+						"Ebs": {
+							"Encrypted": true,
+							"VolumeSize": 110,
+							"VolumeType": "gp2"
+						}
+					}],
+					"IamInstanceProfile": {
+						"Arn": { "Fn::GetAtt": ["ClusterNodeProfile", "Arn"] }
+					},
+					"ImageId": {
+						"Fn::FindInMap": [
+							"AWSAMIRegionMap", { "Ref": "AWS::Region" }, "RHEL75HVM"
+						]
+					},
+					"InstanceType": { "Ref": "ISRepoInstanceType" },
+					"KeyName": { "Ref": "KeyPairName" },
+					"SecurityGroupIds": [
+						{ "Ref": "ClusterNodeSecurityGroupID" }
+					],
+					"UserData": {
+						"Fn::Base64": {
+							"Fn::Join": [
+								"",
+								[
+									"#!/bin/bash\n",
+									"\n",
+									"# Worker index is hard-coded here (for initial cluster setup) \n",
+									"echo 'worker1' > /var/instance_prefix \n",
+									"\n",
+									"# Install aws-cfn \n",
+									"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
+									"curl -O https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
+									"yum install -y aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
+									"export PYTHONPATH=${PYTHONPATH}:/usr/local/lib/python2.7/site-packages\n",
+									"\n",
+									"/opt/aws/bin/cfn-init",
+									" --stack ", { "Ref": "AWS::StackName" },
+									" --resource ISRepoLaunchTemplate",
+									" --configsets worker",
+									" --region ", { "Ref": "AWS::Region" }, "\n",
+									"\n",
+									"/opt/aws/bin/cfn-signal -e $? ",
+									" --stack ", { "Ref": "AWS::StackName" },
+									" --resource ISRepoASGroup ",
+									" --region ", { "Ref": "AWS::Region" }, "\n",
+									{ "Fn::Sub": "/tmp/register_new_worker.sh ${OrderID} is-repository \n" }
+								]
+							]
+						}
+					}
+				}
+			}
+		},
+		"ISRepoASGroup": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
+			"Properties": {
+				"AutoScalingGroupName": { "Fn::Sub": "${OrderID}-ISRepo-ASG" },
+				"VPCZoneIdentifier": [
+					{ "Ref": "PrivateSubnet1ID" }
+				],
+				"Cooldown": "1000",
+				"DesiredCapacity": "1",
+				"HealthCheckGracePeriod": 1000,
+				"HealthCheckType": "EC2",
+				"LaunchTemplate": {
+					"LaunchTemplateId": { "Ref": "ISRepoLaunchTemplate" },
+					"Version": { "Fn::GetAtt": ["ISRepoLaunchTemplate", "DefaultVersionNumber"] }
+				},
+				"MaxSize": "1",
+				"MinSize": "1",
+				"Tags": [{
+					"Key": "Name",
+					"Value": { "Fn::Sub": "${OrderID}-K8s-Worker-IS-Repo" },
+					"PropagateAtLaunch": true
+				}]
+			},
+			"CreationPolicy": {
+				"ResourceSignal": {
+					"Timeout": "PT30M"
+				}
+			}
+		},
+		"ISEngineLaunchTemplate": {
+			"Type": "AWS::EC2::LaunchTemplate",
+			"Properties": {
+				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-ISEngine-LT" },
+				"LaunchTemplateData": {
+					"BlockDeviceMappings": [{
+						"DeviceName": "/dev/sda1",
+						"Ebs": {
+							"VolumeSize": 110,
+							"VolumeType": "gp2"
+						}
+					}, {
+						"DeviceName": "/dev/sdf",
+						"Ebs": {
+							"Encrypted": true,
+							"VolumeSize": 110,
+							"VolumeType": "gp2"
+						}
+					}],
+					"InstanceType": { "Ref": "ISEngineInstanceType" },
+					"IamInstanceProfile": {
+						"Arn": { "Fn::GetAtt": ["ClusterNodeProfile", "Arn"] }
+					},
+					"SecurityGroupIds": [
+						{ "Ref": "ClusterNodeSecurityGroupID" }
+					],
+					"ImageId": {
+						"Fn::FindInMap": [
+							"AWSAMIRegionMap", { "Ref": "AWS::Region" }, "RHEL75HVM"
+						]
+					},
+					"KeyName": { "Ref": "KeyPairName" },
+					"UserData": {
+						"Fn::Base64": {
+							"Fn::Join": [
+								"",
+								[
+									"#!/bin/bash\n",
+									"\n",
+									"# Worker index is hard-coded here (for initial cluster setup) \n",
+									"echo 'worker2' > /var/instance_prefix \n",
+									"\n",
+									"# Install aws-cfn \n",
+									"yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm \n",
+									"curl -O https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
+									"yum install -y aws-cfn-bootstrap-latest.amzn1.noarch.rpm \n",
+									"export PYTHONPATH=${PYTHONPATH}:/usr/local/lib/python2.7/site-packages\n",
+									"\n",
+									"/opt/aws/bin/cfn-init",
+									" --stack ", { "Ref": "AWS::StackName" },
+									" --resource ISRepoLaunchTemplate",
+									" --configsets worker",
+									" --region ", { "Ref": "AWS::Region" }, "\n",
+									"\n",
+									"/opt/aws/bin/cfn-signal -e $? ",
+									" --stack ", { "Ref": "AWS::StackName" },
+									" --resource ISEngineASGroup ",
+									" --region ", { "Ref": "AWS::Region" }, "\n",
+									{ "Fn::Sub": "/tmp/register_new_worker.sh ${OrderID} is-engine \n" }
+								]
+							]
+						}
+					}
+				}
+			}
+		},
+		"ISEngineASGroup": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
+			"Properties": {
+				"AutoScalingGroupName": { "Fn::Sub": "${OrderID}-ISEngine-ASG" },
+				"VPCZoneIdentifier": [
+					{ "Ref": "PrivateSubnet1ID" }
+				],
+				"Cooldown": "1000",
+				"DesiredCapacity": "1",
+				"HealthCheckGracePeriod": 1000,
+				"HealthCheckType": "EC2",
+				"LaunchTemplate": {
+					"LaunchTemplateId": { "Ref": "ISEngineLaunchTemplate" },
+					"Version": { "Fn::GetAtt": ["ISEngineLaunchTemplate", "DefaultVersionNumber"] }
+				},
+				"MaxSize": "1",
+				"MinSize": "1",
+				"Tags": [{
+					"Key": "Name",
+					"Value": { "Fn::Sub": "${OrderID}-K8s-Worker-IS-Engine" },
+					"PropagateAtLaunch": true
+				}]
+			},
+			"CreationPolicy": {
+				"ResourceSignal": {
+					"Timeout": "PT30M"
+				}
+			}
+		},
 		"ProxyTargetGroup": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
-				"HealthCheckPort": "32500",
 				"Name": { "Fn::Sub": "${OrderID}-ProxyTG" },
-				"Port": "32500",
+				"Port": 32500,
 				"Protocol": "TCP",
 				"Targets": [{
-						"Id": { "Ref": "k8sMaster1Instance" },
-						"Port": "32500"
+						"Id": { "Ref": "K8sMaster1Instance" },
+						"Port": 32500
 					},
 					{
-						"Id": { "Ref": "k8sMaster2Instance" },
-						"Port": "32500"
+						"Id": { "Ref": "K8sMaster2Instance" },
+						"Port": 32500
 					},
 					{
-						"Id": { "Ref": "k8sMaster3Instance" },
-						"Port": "32500"
+						"Id": { "Ref": "K8sMaster3Instance" },
+						"Port": 32500
 					}
 				],
 				"VpcId": { "Ref": "VPCID" }
@@ -983,32 +1100,113 @@
 					"Type": "forward",
 					"TargetGroupArn": { "Ref": "ProxyTargetGroup" }
 				}],
-				"LoadBalancerArn": { "Ref": "MasterNLB" },
-				"Port": "32500",
+				"LoadBalancerArn": { "Ref": "ProxyNLB" },
+				"Port": 32500,
 				"Protocol": "TCP"
+			}
+		},
+		"ProxyTargetGroup2": {
+			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+			"Properties": {
+				"Name": { "Fn::Sub": "${OrderID}-ProxyTG2" },
+				"Port": 32501,
+				"Protocol": "TCP",
+				"Targets": [{
+						"Id": { "Ref": "K8sMaster1Instance" },
+						"Port": 32501
+					},
+					{
+						"Id": { "Ref": "K8sMaster2Instance" },
+						"Port": 32501
+					},
+					{
+						"Id": { "Ref": "K8sMaster3Instance" },
+						"Port": 32501
+					}
+				],
+				"VpcId": { "Ref": "VPCID" }
+			}
+		},
+		"ProxyListener2": {
+			"Type": "AWS::ElasticLoadBalancingV2::Listener",
+			"Properties": {
+				"DefaultActions": [{
+					"Type": "forward",
+					"TargetGroupArn": { "Ref": "ProxyTargetGroup2" }
+				}],
+				"LoadBalancerArn": { "Ref": "ProxyNLB" },
+				"Port": 32501,
+				"Protocol": "TCP"
+			}
+		},
+		"ProxyTargetGroup3": {
+			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+			"Properties": {
+				"Name": { "Fn::Sub": "${OrderID}-ProxyTG3" },
+				"Port": 32502,
+				"Protocol": "TCP",
+				"Targets": [{
+						"Id": { "Ref": "K8sMaster1Instance" },
+						"Port": 32502
+					},
+					{
+						"Id": { "Ref": "K8sMaster2Instance" },
+						"Port": 32502
+					},
+					{
+						"Id": { "Ref": "K8sMaster3Instance" },
+						"Port": 32502
+					}
+				],
+				"VpcId": { "Ref": "VPCID" }
+			}
+		},
+		"ProxyListener3": {
+			"Type": "AWS::ElasticLoadBalancingV2::Listener",
+			"Properties": {
+				"DefaultActions": [{
+					"Type": "forward",
+					"TargetGroupArn": { "Ref": "ProxyTargetGroup3" }
+				}],
+				"LoadBalancerArn": { "Ref": "ProxyNLB" },
+				"Port": 32502,
+				"Protocol": "TCP"
+			}
+		},
+		"MasterNLB": {
+			"Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+			"Properties": {
+				"Name": { "Fn::Sub": "${OrderID}-master" },
+				"Scheme": "internal",
+				"Subnets": [
+					{ "Ref": "PrivateSubnet1ID" },
+					{ "Ref": "PrivateSubnet2ID" },
+					{ "Fn::If": ["3AZCondition", { "Ref": "PrivateSubnet3ID" }, { "Ref": "AWS::NoValue" }] }
+				],
+				"Type": "network"
 			}
 		},
 		"MasterTargetGroup": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
-				"HealthCheckPort": "6443",
 				"HealthCheckIntervalSeconds": 10,
-				"Name": { "Fn::Sub": "${OrderID}-Master" },
-				"Port": "6443",
+				"Name": { "Fn::Sub": "${OrderID}-MasterTG" },
+				"Port": 6443,
 				"Protocol": "TCP",
 				"Targets": [{
-						"Id": { "Ref": "k8sMaster1Instance" },
-						"Port": "6443"
+						"Id": { "Fn::GetAtt": ["K8sMaster1Instance", "PrivateIp"] },
+						"Port": 6443
 					},
 					{
-						"Id": { "Ref": "k8sMaster2Instance" },
-						"Port": "6443"
+						"Id": { "Fn::GetAtt": ["K8sMaster2Instance", "PrivateIp"] },
+						"Port": 6443
 					},
 					{
-						"Id": { "Ref": "k8sMaster3Instance" },
-						"Port": "6443"
+						"Id": { "Fn::GetAtt": ["K8sMaster3Instance", "PrivateIp"] },
+						"Port": 6443
 					}
 				],
+				"TargetType": "ip",
 				"VpcId": { "Ref": "VPCID" }
 			}
 		},
@@ -1020,128 +1218,89 @@
 					"TargetGroupArn": { "Ref": "MasterTargetGroup" }
 				}],
 				"LoadBalancerArn": { "Ref": "MasterNLB" },
-				"Port": "6443",
+				"Port": 6443,
 				"Protocol": "TCP"
 			}
 		},
-		"SSHTargetGroup": {
+		"DockerRepoTargetGroup": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
-				"HealthCheckPort": "22",
 				"HealthCheckIntervalSeconds": 10,
-				"Name": { "Fn::Sub": "${OrderID}-SSH" },
-				"Port": "22",
+				"Name": { "Fn::Sub": "${OrderID}-DockerRepoTG" },
+				"Port": 5000,
 				"Protocol": "TCP",
 				"Targets": [{
-					"Id": { "Ref": "k8sMaster1Instance" },
-					"Port": "22"
-				}],
+						"Id": { "Fn::GetAtt": ["K8sMaster1Instance", "PrivateIp"] },
+						"Port": 5000
+					},
+					{
+						"Id": { "Fn::GetAtt": ["K8sMaster2Instance", "PrivateIp"] },
+						"Port": 5000
+					},
+					{
+						"Id": { "Fn::GetAtt": ["K8sMaster3Instance", "PrivateIp"] },
+						"Port": 5000
+					}
+				],
+				"TargetType": "ip",
 				"VpcId": { "Ref": "VPCID" }
 			}
 		},
-		"SSHListener": {
+		"DockerRepoListener": {
 			"Type": "AWS::ElasticLoadBalancingV2::Listener",
 			"Properties": {
 				"DefaultActions": [{
 					"Type": "forward",
-					"TargetGroupArn": { "Ref": "SSHTargetGroup" }
+					"TargetGroupArn": { "Ref": "DockerRepoTargetGroup" }
 				}],
 				"LoadBalancerArn": { "Ref": "MasterNLB" },
-				"Port": "22",
+				"Port": 5000,
 				"Protocol": "TCP"
 			}
 		},
-		"k8sMaster1FQDN": {
+		"NWLTargetGroup": {
+			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+			"Properties": {
+				"HealthCheckIntervalSeconds": 10,
+				"Name": { "Fn::Sub": "${OrderID}-NWLTG" },
+				"Port": 8080,
+				"Protocol": "TCP",
+				"Targets": [{
+						"Id": { "Fn::GetAtt": ["K8sMaster1Instance", "PrivateIp"] },
+						"Port": 8080
+					},
+					{
+						"Id": { "Fn::GetAtt": ["K8sMaster2Instance", "PrivateIp"] },
+						"Port": 8080
+					},
+					{
+						"Id": { "Fn::GetAtt": ["K8sMaster3Instance", "PrivateIp"] },
+						"Port": 8080
+					}
+				],
+				"TargetType": "ip",
+				"VpcId": { "Ref": "VPCID" }
+			}
+		},
+		"NWLRepoListener": {
+			"Type": "AWS::ElasticLoadBalancingV2::Listener",
+			"Properties": {
+				"DefaultActions": [{
+					"Type": "forward",
+					"TargetGroupArn": { "Ref": "NWLTargetGroup" }
+				}],
+				"LoadBalancerArn": { "Ref": "MasterNLB" },
+				"Port": 8080,
+				"Protocol": "TCP"
+			}
+		},
+		"MasterNLBParam": {
 			"Type": "AWS::SSM::Parameter",
 			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master1_fqdn" },
+				"Name": { "Fn::Sub": "/${OrderID}/master_nlb_dnsname" },
 				"Type": "String",
 				"Value": {
-					"Fn::GetAtt": ["k8sMaster1Instance", "PrivateDnsName"]
-				}
-			}
-		},
-		"k8sMaster2FQDN": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master2_fqdn" },
-				"Type": "String",
-				"Value": { "Fn::GetAtt": ["k8sMaster2Instance", "PrivateDnsName"] }
-			}
-		},
-		"k8sMaster3FQDN": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master3_fqdn" },
-				"Type": "String",
-				"Value": { "Fn::GetAtt": ["k8sMaster3Instance", "PrivateDnsName"] }
-			}
-		},
-		"k8sWorker1FQDN": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/worker1_fqdn" },
-				"Type": "String",
-				"Value": { "Fn::GetAtt": ["k8sWorker1Instance", "PrivateDnsName"] }
-			}
-		},
-		"k8sWorker2FQDN": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/worker2_fqdn" },
-				"Type": "String",
-				"Value": {
-					"Fn::GetAtt": ["k8sWorker2Instance", "PrivateDnsName"]
-				}
-			}
-		},
-		"k8sMaster1IP": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master1_ip" },
-				"Type": "String",
-				"Value": {
-					"Fn::GetAtt": ["k8sMaster1Instance", "PrivateIp"]
-				}
-			}
-		},
-		"k8sMaster2IP": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master2_ip" },
-				"Type": "String",
-				"Value": {
-					"Fn::GetAtt": ["k8sMaster2Instance", "PrivateIp"]
-				}
-			}
-		},
-		"k8sMaster3IP": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master3_ip" },
-				"Type": "String",
-				"Value": {
-					"Fn::GetAtt": ["k8sMaster3Instance", "PrivateIp"]
-				}
-			}
-		},
-		"k8sWorker1IP": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/worker1_ip" },
-				"Type": "String",
-				"Value": {
-					"Fn::GetAtt": ["k8sWorker1Instance", "PrivateIp"]
-				}
-			}
-		},
-		"k8sWorker2IP": {
-			"Type": "AWS::SSM::Parameter",
-			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/worker2_ip" },
-				"Type": "String",
-				"Value": {
-					"Fn::GetAtt": ["k8sWorker2Instance", "PrivateIp"]
+					"Fn::GetAtt": ["MasterNLB", "DNSName"]
 				}
 			}
 		}

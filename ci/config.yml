@@ -12,16 +12,13 @@ global:
     # - eu-central-1
     # - eu-west-1
     # - sa-east-1
-    # - us-east-1
-    # - us-east-2
+    - us-east-1
+    - us-east-2
     # - us-west-1
     # - us-west-2
   reporting: true
 
 tests:
-  ds-vpc-3az:
-    parameter_input: ds-vpc-3az-parameters.json
-    template_file: ibm-datastage-vpc.template
   ds-master-3az:
     parameter_input: ds-master-3az-parameters.json
     template_file: ibm-datastage-master.template

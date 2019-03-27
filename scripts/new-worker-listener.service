@@ -1,0 +1,20 @@
+# New Worker Listener Server: API server for registering a new worker to the cluster
+# place in /etc/systemd/system/
+# `systemctl daemon-reload`
+# `systemctl enable new-worker-listener`
+# `systemctl start new-worker-listener`
+
+[Unit]
+After=network.target
+Description=New Worker Listener Service
+
+[Service]
+ExecStart=/disk1/quickstart/new_worker_listener.py
+Restart=always
+RestartSec=1
+StartLimitInterval=0
+Type=simple
+User=root
+
+[Install]
+WantedBy=multi-user.target
