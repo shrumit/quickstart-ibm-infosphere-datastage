@@ -286,7 +286,7 @@
 			"DependsOn": "K8sMaster1Instance",
 			"Properties": {
 				"Handle": { "Ref": "WaitHandle" },
-				"Timeout": "6000"
+				"Timeout": "9000"
 			}
 		},
 		"K8sMaster1Instance": {
