@@ -1,34 +1,34 @@
 [
     {
-		"ParameterKey": "AllowedPublicCIDR",
-		"ParameterValue": "0.0.0.0/0"
-	},
-	{
-		"ParameterKey": "AvailabilityZones",
-		"ParameterValue": "$[taskcat_genaz_3]"
-	},
-	{
-		"ParameterKey": "IBMClientNumber",
-		"ParameterValue": "051400"
-	},
-	{
-		"ParameterKey": "IBMPartNumber",
-		"ParameterValue": "D1VLALL"
-	},
-	{
-		"ParameterKey": "IISPassword",
-		"ParameterValue": "Password@123"
-	},
-	{
-		"ParameterKey": "KeyPairName",
-		"ParameterValue": "$[taskcat_getkeypair]"
-	},
-	{
-		"ParameterKey": "LicenseAgreement",
-		"ParameterValue": "I agree"
-	},
-	{
-		"ParameterKey": "QSS3BucketName",
-		"ParameterValue": "$[taskcat_autobucket]"
-	}
+        "ParameterKey": "AllowedPublicCIDR",
+        "ParameterValue": "0.0.0.0/0"
+    },
+    {
+        "ParameterKey": "AvailabilityZones",
+        "ParameterValue": "$[taskcat_genaz_3]"
+    },
+    {
+        "ParameterKey": "IBMClientNumber",
+        "ParameterValue": "051400"
+    },
+    {
+        "ParameterKey": "IBMPartNumber",
+        "ParameterValue": "D1VLALL"
+    },
+    {
+        "ParameterKey": "IISPassword",
+        "ParameterValue": "Password@123"
+    },
+    {
+        "ParameterKey": "KeyPairName",
+        "ParameterValue": "$[taskcat_getkeypair]"
+    },
+    {
+        "ParameterKey": "LicenseAgreement",
+        "ParameterValue": "I agree"
+    },
+    {
+        "ParameterKey": "QSS3BucketName",
+        "ParameterValue": "$[taskcat_autobucket]"
+    }
 ]

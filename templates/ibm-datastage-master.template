@@ -44,7 +44,8 @@
                     "KeyPairName",
                     "DSClientInstanceType",
                     "ISRepoInstanceType",
-                    "ISEngineInstanceType"
+                    "ISEngineInstanceType",
+                    "K8sMasterInstanceType"
                 ]
             }, {
                 "Label": {
@@ -57,31 +58,34 @@
             }],
             "ParameterLabels": {
                 "AllowedPublicCIDR": {
-                    "default": "Allowed Public CIDR"
+                    "default": "Allowed external access CIDR"
                 },
                 "AvailabilityZones": {
                     "default": "Availability Zones"
                 },
                 "DSClientInstanceType": {
-                    "default": "InfoSphere DataStage Client Instance Type"
+                    "default": "InfoSphere DataStage Client instance type"
                 },
                 "IBMClientNumber": {
-                    "default": "IBM Client Number"
+                    "default": "IBM Client Number (ICN)"
                 },
                 "IBMPartNumber": {
-                    "default": "IBM Part Number"
+                    "default": "IBM part number"
                 },
                 "IISPassword": {
-                    "default": "IBM InfoSphere Password"
+                    "default": "IBM InfoSphere password"
                 },
                 "ISRepoInstanceType": {
-                    "default": "InfoSphere DataStage Repo Worker Instance Type"
+                    "default": "InfoSphere DataStage Repo worker instance type"
                 },
                 "ISEngineInstanceType": {
-                    "default": "InfoSphere DataStage Engine Worker Instance Type"
+                    "default": "InfoSphere DataStage Engine worker instance type"
+                },
+                "K8sMasterInstanceType": {
+                    "default": "Kubernetes master instance type"
                 },
                 "KeyPairName": {
-                    "default": "Key Pair Name"
+                    "default": "Key pair name"
                 },
                 "LicenseAgreement": {
                     "default": "License Agreement"
@@ -93,28 +97,28 @@
                     "default": "Order ID"
                 },
                 "PrivateSubnet1CIDR": {
-                    "default": "Private Subnet 1 CIDR"
+                    "default": "Private subnet 1 CIDR"
                 },
                 "PrivateSubnet2CIDR": {
-                    "default": "Private Subnet 2 CIDR"
+                    "default": "Private subnet 2 CIDR"
                 },
                 "PrivateSubnet3CIDR": {
-                    "default": "Private Subnet 3 CIDR"
+                    "default": "Private subnet 3 CIDR"
                 },
                 "PublicSubnet1CIDR": {
-                    "default": "Public Subnet 1 CIDR"
+                    "default": "Public subnet 1 CIDR"
                 },
                 "PublicSubnet2CIDR": {
-                    "default": "Public Subnet 2 CIDR"
+                    "default": "Public subnet 2 CIDR"
                 },
                 "PublicSubnet3CIDR": {
-                    "default": "Public Subnet 3 CIDR"
+                    "default": "Public subnet 3 CIDR"
                 },
                 "QSS3BucketName": {
-                    "default": "Quick Start S3 Bucket Name"
+                    "default": "Quick Start S3 bucket name"
                 },
                 "QSS3KeyPrefix": {
-                    "default": "Quick Start S3 Key Prefix"
+                    "default": "Quick Start S3 key prefix"
                 },
                 "VPCCIDR": {
                     "default": "The CIDR block for the VPC"
@@ -151,12 +155,12 @@
         },
         "IBMClientNumber": {
             "AllowedPattern": "[0-9]+",
-            "Description": "IBM Client Number associated with your license",
+            "Description": "ICN associated with your license",
             "NoEcho": "true",
             "Type": "String"
         },
         "IBMPartNumber": {
-            "Description": "Part Number associated with your license",
+            "Description": "Part number associated with your license",
             "Type": "String"
         },
         "IISPassword": {
@@ -189,7 +193,6 @@
                 "r5.4xlarge",
                 "r5.12xlarge",
                 "r5.24xlarge",
-                "r5.metal",
                 "r5a.large",
                 "r5a.xlarge",
                 "r5a.2xlarge",
@@ -199,11 +202,17 @@
                 "c5.2xlarge",
                 "c5.4xlarge",
                 "c5.9xlarge",
-                "c5.18xlarge"
+                "c5.18xlarge",
+                "z1d.large",
+                "z1d.xlarge",
+                "z1d.2xlarge",
+                "z1d.3xlarge",
+                "z1d.6xlarge",
+                "z1d.12xlarge"
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "Type of EC2 instance for IS Repo Worker instances",
+            "Description": "Type of EC2 instance for IS Repo worker node instances.",
             "Type": "String"
         },
         "ISEngineInstanceType": {
@@ -227,7 +236,6 @@
                 "r5.4xlarge",
                 "r5.12xlarge",
                 "r5.24xlarge",
-                "r5.metal",
                 "r5a.large",
                 "r5a.xlarge",
                 "r5a.2xlarge",
@@ -237,11 +245,48 @@
                 "c5.2xlarge",
                 "c5.4xlarge",
                 "c5.9xlarge",
-                "c5.18xlarge"
+                "c5.18xlarge",
+                "z1d.large",
+                "z1d.xlarge",
+                "z1d.2xlarge",
+                "z1d.3xlarge",
+                "z1d.6xlarge",
+                "z1d.12xlarge"
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "Type of EC2 instance for IS Engine Worker instances",
+            "Description": "Type of EC2 instance for IS Engine worker node instances.",
+            "Type": "String"
+        },
+        "K8sMasterInstanceType": {
+            "AllowedValues": [
+                "a1.large",
+                "a1.xlarge",
+                "t3.small",
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.large",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5a.large",
+                "m5a.xlarge",
+                "m5a.2xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5a.large",
+                "r5a.xlarge",
+                "c5.large",
+                "c5.xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "z1d.large",
+                "z1d.xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.large",
+            "Description": "Type of EC2 instance for the Kubernetes master node instances",
             "Type": "String"
         },
         "KeyPairName": {
@@ -453,6 +498,9 @@
                     },
                     "ISEngineInstanceType": {
                         "Ref": "ISEngineInstanceType"
+                    },
+                    "K8sMasterInstanceType": {
+                        "Ref": "K8sMasterInstanceType"
                     },
                     "KeyPairName": {
                         "Ref": "KeyPairName"

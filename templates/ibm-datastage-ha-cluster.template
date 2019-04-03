@@ -58,7 +58,6 @@
 				"r5.4xlarge",
 				"r5.12xlarge",
 				"r5.24xlarge",
-				"r5.metal",
 				"r5a.large",
 				"r5a.xlarge",
 				"r5a.2xlarge",
@@ -68,11 +67,17 @@
 				"c5.2xlarge",
 				"c5.4xlarge",
 				"c5.9xlarge",
-				"c5.18xlarge"
+				"c5.18xlarge",
+				"z1d.large",
+				"z1d.xlarge",
+				"z1d.2xlarge",
+				"z1d.3xlarge",
+				"z1d.6xlarge",
+				"z1d.12xlarge"
 			],
 			"ConstraintDescription": "Must contain valid instance type",
 			"Default": "m5.xlarge",
-			"Description": "Type of EC2 instance for the Kubernetes master nodes",
+			"Description": "Type of EC2 instance for IS Repo worker node instances.",
 			"Type": "String"
 		},
 		"ISEngineInstanceType": {
@@ -96,7 +101,6 @@
 				"r5.4xlarge",
 				"r5.12xlarge",
 				"r5.24xlarge",
-				"r5.metal",
 				"r5a.large",
 				"r5a.xlarge",
 				"r5a.2xlarge",
@@ -106,11 +110,48 @@
 				"c5.2xlarge",
 				"c5.4xlarge",
 				"c5.9xlarge",
-				"c5.18xlarge"
+				"c5.18xlarge",
+				"z1d.large",
+				"z1d.xlarge",
+				"z1d.2xlarge",
+				"z1d.3xlarge",
+				"z1d.6xlarge",
+				"z1d.12xlarge"
 			],
 			"ConstraintDescription": "Must contain valid instance type",
 			"Default": "m5.xlarge",
-			"Description": "Type of EC2 instance for the Kubernetes worker nodes",
+			"Description": "Type of EC2 instance for IS Engine worker node instances.",
+			"Type": "String"
+		},
+		"K8sMasterInstanceType": {
+			"AllowedValues": [
+				"a1.large",
+				"a1.xlarge",
+				"t3.small",
+				"t3.medium",
+				"t3.large",
+				"t3.xlarge",
+				"t3.2xlarge",
+				"m5.large",
+				"m5.xlarge",
+				"m5.2xlarge",
+				"m5a.large",
+				"m5a.xlarge",
+				"m5a.2xlarge",
+				"r5.large",
+				"r5.xlarge",
+				"r5a.large",
+				"r5a.xlarge",
+				"c5.large",
+				"c5.xlarge",
+				"c5.2xlarge",
+				"c5.4xlarge",
+				"z1d.large",
+				"z1d.xlarge"
+			],
+			"ConstraintDescription": "Must contain valid instance type",
+			"Default": "t3.large",
+			"Description": "Type of EC2 instance for the Kubernetes master node instances",
 			"Type": "String"
 		},
 		"KeyPairName": {
@@ -185,6 +226,13 @@
 				},
 				"3"
 			]
+		},
+		"GovCloudCondition": {
+			"Fn::Equals": [{
+					"Ref": "AWS::Region"
+				},
+				"us-gov-west-1"
+			]
 		}
 	},
 	"Mappings": {
@@ -239,6 +287,30 @@
 				},
 				"Path": "/",
 				"Policies": [{
+						"PolicyDocument": {
+							"Version": "2012-10-17",
+							"Statement": [{
+								"Action": "s3:GetObject",
+								"Resource": {
+									"Fn::Sub": [
+										"arn:${Partition}:s3:::${QSS3BucketName}/${QSS3KeyPrefix}*",
+										{
+											"Partition": {
+												"Fn::If": [
+													"GovCloudCondition",
+													"aws-us-gov",
+													"aws"
+												]
+											}
+										}
+									]
+								},
+								"Effect": "Allow"
+							}]
+						},
+						"PolicyName": { "Fn::Sub": "${OrderID}-QSS3GetObject" }
+					},
+					{
 						"PolicyDocument": {
 							"Version": "2012-10-17",
 							"Statement": [{
@@ -429,9 +501,16 @@
 		"MasterLaunchTemplate": {
 			"Type": "AWS::EC2::LaunchTemplate",
 			"Metadata": {
+				"AWS::CloudFormation::Authentication": {
+					"S3RoleAuth": {
+						"buckets": [{ "Ref": "QSS3BucketName" }],
+						"roleName": { "Ref": "ClusterNodeRole" },
+						"type": "S3"
+					}
+				},
 				"AWS::CloudFormation::Init": {
 					"configSets": {
-						"primaryMaster": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_primary", "store_ip_hn", "update_datastageinfo", "download_installer", "install_datastage", "new_worker_listener_files", "enable_nwl_service"],
+						"primaryMaster": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_primary", "store_ip_hn", "update_datastageinfo", "download_installer", "new_worker_listener_files", "install_datastage", "enable_nwl_service"],
 						"secondaryMaster": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_secondary", "store_ip_hn", "update_datastageinfo", "download_installer", "new_worker_listener_files"]
 					},
 					"install_packages": {
@@ -455,7 +534,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_ebs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -470,7 +550,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_efs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -485,7 +566,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/install_aws_cli.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							},
 							"/root/.aws/config": {
 								"content": {
@@ -510,7 +592,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_primary_master.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -525,7 +608,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_secondary_master.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -540,7 +624,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/store_ip_hn.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -611,7 +696,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/datastageinfo_updater.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -626,7 +712,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/download_installer.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -668,29 +755,30 @@
 					},
 					"new_worker_listener_files": {
 						"files": {
-							"/disk1/quickstart/new_worker_listener.py": {
-								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new_worker_listener.py" },
-								"mode": "000744",
-								"owner": "root",
-								"group": "root"
-							},
-							"/etc/systemd/system/new-worker-listener.service": {
-								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new-worker-listener.service" },
-								"mode": "000744",
-								"owner": "root",
-								"group": "root"
-							}
-						}
-					},
-					"enable_nwl_service": {
-						"files": {
 							"/tmp/enable_nwl_service.sh": {
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/enable_nwl_service.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
+							},
+							"/disk1/quickstart/new_worker_listener.py": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new_worker_listener.py" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root",
+								"authentication": "S3RoleAuth"
+							},
+							"/etc/systemd/system/new-worker-listener.service": {
+								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new_worker_listener.service" },
+								"mode": "000744",
+								"owner": "root",
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
-						},
+						}
+					},
+					"enable_nwl_service": {
 						"commands": {
 							"0": {
 								"command": { "Fn::Sub": "/tmp/enable_nwl_service.sh ${OrderID}" }
@@ -719,7 +807,7 @@
 					"IamInstanceProfile": {
 						"Arn": { "Fn::GetAtt": ["ClusterNodeProfile", "Arn"] }
 					},
-					"InstanceType": "t3.medium",
+					"InstanceType": { "Ref": "K8sMasterInstanceType" },
 					"ImageId": {
 						"Fn::FindInMap": [
 							"AWSAMIRegionMap", { "Ref": "AWS::Region" }, "RHEL75HVM"
@@ -753,6 +841,13 @@
 		"ISRepoLaunchTemplate": {
 			"Type": "AWS::EC2::LaunchTemplate",
 			"Metadata": {
+				"AWS::CloudFormation::Authentication": {
+					"S3RoleAuth": {
+						"buckets": [{ "Ref": "QSS3BucketName" }],
+						"roleName": { "Ref": "ClusterNodeRole" },
+						"type": "S3"
+					}
+				},
 				"AWS::CloudFormation::Init": {
 					"configSets": {
 						"worker": ["install_packages", "mount_ebs", "mount_efs", "install_aws_cli", "set_passwordless_worker", "store_ip_hn", "disable_sourcedest_check", "register_new_worker"]
@@ -778,7 +873,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_ebs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -793,7 +889,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_efs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -808,7 +905,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/install_aws_cli.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							},
 							"/root/.aws/config": {
 								"content": {
@@ -832,7 +930,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_worker.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -847,7 +946,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/store_ip_hn.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -862,7 +962,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/disable_sourcedest_check.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						},
 						"commands": {
@@ -877,7 +978,8 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/register_new_worker.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root"
+								"group": "root",
+								"authentication": "S3RoleAuth"
 							}
 						}
 					}

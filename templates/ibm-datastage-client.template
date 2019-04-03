@@ -79,9 +79,17 @@
     },
     "Mappings": {
         "AWSAMIRegionMap": {
+            "eu-west-2": { "DSClientWin": "ami-035fbc87b66c68d48" },
+            "eu-west-1": { "DSClientWin": "ami-07b80d057fabbfba6" },
+            "ap-northeast-2": { "DSClientWin": "ami-010efa7d22693f107" },
+            "ap-northeast-1": { "DSClientWin": "ami-0ce1cc3ca548cecee" },
             "ap-southeast-1": { "DSClientWin": "ami-0630ac43ed5f8e261" },
+            "ap-southeast-2": { "DSClientWin": "ami-0112d075fc2402997" },
+            "eu-central-1": { "DSClientWin": "ami-0c925bbb49ff963de" },
             "us-east-1": { "DSClientWin": "ami-058c03255041cf093" },
-            "us-east-2": { "DSClientWin": "ami-0c442b257e181d253" }
+            "us-east-2": { "DSClientWin": "ami-0c442b257e181d253" },
+            "us-west-1": { "DSClientWin": "ami-07a2957fc977e520a" },
+            "us-west-2": { "DSClientWin": "ami-0f8546d8fd72ad505" }
         }
     },
     "Rules": {
@@ -103,9 +111,18 @@
             "Properties": {
                 "LaunchTemplateName": { "Fn::Sub": "${OrderID}-DSClientLT" },
                 "LaunchTemplateData": {
+                    "BlockDeviceMappings": [{
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": 200,
+                            "VolumeType": "gp2"
+                        }
+                    }],
                     "ImageId": {
                         "Fn::FindInMap": ["AWSAMIRegionMap", { "Ref": "AWS::Region" }, "DSClientWin"]
                     },
+                    "InstanceType": { "Ref": "DSClientInstanceType" },
+                    "KeyName": { "Ref": "KeyPairName" },
                     "SecurityGroupIds": [
                         { "Ref": "DataStageClientSecurityGroupID" }
                     ]
@@ -115,15 +132,6 @@
         "DataStageClientInstance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
-                "BlockDeviceMappings": [{
-                    "DeviceName": "/dev/sda1",
-                    "Ebs": {
-                        "VolumeSize": 200,
-                        "VolumeType": "gp2"
-                    }
-                }],
-                "InstanceType": { "Ref": "DSClientInstanceType" },
-                "KeyName": { "Ref": "KeyPairName" },
                 "LaunchTemplate": {
                     "LaunchTemplateId": { "Ref": "DataStageClientLaunchTemplate" },
                     "Version": { "Fn::GetAtt": ["DataStageClientLaunchTemplate", "DefaultVersionNumber"] }
