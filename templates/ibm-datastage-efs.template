@@ -15,7 +15,7 @@
             "Description": "Number of Availability Zones to use in the VPC. This must match your selections in the list of Availability Zones parameter.",
             "Type": "String"
         },
-        "OrderID": {
+        "ResourceTag": {
             "AllowedPattern": "[A-Za-z0-9]+",
             "ConstraintDescription": "Non-empty; alphanumeric characters",
             "Default": "DS1",
@@ -51,7 +51,7 @@
                 "PerformanceMode": "generalPurpose",
                 "FileSystemTags": [{
                     "Key": "Name",
-                    "Value": { "Fn::Sub": "${OrderID}-efs" }
+                    "Value": { "Fn::Sub": "${ResourceTag}-efs" }
                 }]
             }
         },

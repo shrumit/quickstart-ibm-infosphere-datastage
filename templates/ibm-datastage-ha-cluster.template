@@ -180,7 +180,7 @@
 			"Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
 			"Type": "String"
 		},
-		"OrderID": {
+		"ResourceTag": {
 			"AllowedPattern": "[a-z0-9]+",
 			"ConstraintDescription": "Non-empty; lower case letters and numbers",
 			"Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
@@ -308,7 +308,7 @@
 								"Effect": "Allow"
 							}]
 						},
-						"PolicyName": { "Fn::Sub": "${OrderID}-QSS3GetObject" }
+						"PolicyName": { "Fn::Sub": "${ResourceTag}-QSS3GetObject" }
 					},
 					{
 						"PolicyDocument": {
@@ -321,10 +321,10 @@
 									"ssm:GetParametersByPath"
 								],
 								"Effect": "Allow",
-								"Resource": { "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${OrderID}/*" }
+								"Resource": { "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${ResourceTag}/*" }
 							}]
 						},
-						"PolicyName": { "Fn::Sub": "${OrderID}-EC2ParameterStoreBasic" }
+						"PolicyName": { "Fn::Sub": "${ResourceTag}-EC2ParameterStoreBasic" }
 					},
 					{
 						"PolicyDocument": {
@@ -335,7 +335,7 @@
 								"Resource": "*"
 							}]
 						},
-						"PolicyName": { "Fn::Sub": "${OrderID}-ModifyInstanceAttribute" }
+						"PolicyName": { "Fn::Sub": "${ResourceTag}-ModifyInstanceAttribute" }
 					}
 				]
 			}
@@ -372,7 +372,7 @@
 				"SubnetId": { "Ref": "PrivateSubnet1ID" },
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-K8s-Master-1" }
+					"Value": { "Fn::Sub": "${ResourceTag}-K8s-Master-1" }
 				}],
 				"UserData": {
 					"Fn::Base64": {
@@ -419,7 +419,7 @@
 				"SubnetId": { "Ref": "PrivateSubnet2ID" },
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-K8s-Master-2" }
+					"Value": { "Fn::Sub": "${ResourceTag}-K8s-Master-2" }
 				}],
 				"UserData": {
 					"Fn::Base64": {
@@ -464,7 +464,7 @@
 				"SubnetId": { "Ref": "PrivateSubnet3ID" },
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-K8s-Master-3" }
+					"Value": { "Fn::Sub": "${ResourceTag}-K8s-Master-3" }
 				}],
 				"UserData": {
 					"Fn::Base64": {
@@ -534,8 +534,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_ebs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
@@ -550,8 +549,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_efs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
@@ -566,8 +564,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/install_aws_cli.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							},
 							"/root/.aws/config": {
 								"content": {
@@ -592,13 +589,12 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_primary_master.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/pwless_primary_master.sh ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/pwless_primary_master.sh ${ResourceTag}" }
 							}
 						}
 					},
@@ -608,13 +604,12 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_secondary_master.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/pwless_secondary_master.sh ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/pwless_secondary_master.sh ${ResourceTag}" }
 							}
 						}
 					},
@@ -624,13 +619,12 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/store_ip_hn.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/store_ip_hn.sh ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/store_ip_hn.sh ${ResourceTag}" }
 							}
 						}
 					},
@@ -639,7 +633,7 @@
 							"/disk1/quickstart/datastageinfo_partial.json": {
 								"content": {
 									"licenseAccepted": "yes",
-									"namespace": { "Ref": "OrderID" },
+									"namespace": { "Ref": "ResourceTag" },
 									"numberOfNodes": "3",
 									"distributedFileSystemType": "nfs",
 									"distributedDataDir": "/efs",
@@ -696,13 +690,12 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/datastageinfo_updater.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/datastageinfo_updater.sh ${DataStageClientFQDN} ${DataStageClientPrivateIP} ${MasterNLB.DNSName} ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/datastageinfo_updater.sh ${DataStageClientFQDN} ${DataStageClientPrivateIP} ${MasterNLB.DNSName} ${ResourceTag}" }
 							}
 						}
 					},
@@ -712,8 +705,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/download_installer.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
@@ -759,36 +751,33 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/enable_nwl_service.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							},
 							"/disk1/quickstart/new_worker_listener.py": {
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new_worker_listener.py" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							},
 							"/etc/systemd/system/new-worker-listener.service": {
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/new_worker_listener.service" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						}
 					},
 					"enable_nwl_service": {
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/enable_nwl_service.sh ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/enable_nwl_service.sh ${ResourceTag}" }
 							}
 						}
 					}
 				}
 			},
 			"Properties": {
-				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-MasterLT" },
+				"LaunchTemplateName": { "Fn::Sub": "${ResourceTag}-MasterLT" },
 				"LaunchTemplateData": {
 					"BlockDeviceMappings": [{
 						"DeviceName": "/dev/sda1",
@@ -873,8 +862,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_ebs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
@@ -889,8 +877,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/mount_efs.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
@@ -905,8 +892,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/install_aws_cli.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							},
 							"/root/.aws/config": {
 								"content": {
@@ -930,13 +916,12 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/pwless_worker.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/pwless_worker.sh ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/pwless_worker.sh ${ResourceTag}" }
 							}
 						}
 					},
@@ -946,13 +931,12 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/store_ip_hn.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/store_ip_hn.sh ${OrderID}" }
+								"command": { "Fn::Sub": "/tmp/store_ip_hn.sh ${ResourceTag}" }
 							}
 						}
 					},
@@ -962,8 +946,7 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/disable_sourcedest_check.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						},
 						"commands": {
@@ -978,15 +961,14 @@
 								"source": { "Fn::Sub": "https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}scripts/register_new_worker.sh" },
 								"mode": "000744",
 								"owner": "root",
-								"group": "root",
-								"authentication": "S3RoleAuth"
+								"group": "root"
 							}
 						}
 					}
 				}
 			},
 			"Properties": {
-				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-ISRepo-LT" },
+				"LaunchTemplateName": { "Fn::Sub": "${ResourceTag}-ISRepo-LT" },
 				"LaunchTemplateData": {
 					"BlockDeviceMappings": [{
 						"DeviceName": "/dev/sda1",
@@ -1041,7 +1023,7 @@
 									" --stack ", { "Ref": "AWS::StackName" },
 									" --resource ISRepoASGroup ",
 									" --region ", { "Ref": "AWS::Region" }, "\n",
-									{ "Fn::Sub": "/tmp/register_new_worker.sh ${OrderID} is-repository \n" }
+									{ "Fn::Sub": "/tmp/register_new_worker.sh ${ResourceTag} is-repository \n" }
 								]
 							]
 						}
@@ -1052,7 +1034,7 @@
 		"ISRepoASGroup": {
 			"Type": "AWS::AutoScaling::AutoScalingGroup",
 			"Properties": {
-				"AutoScalingGroupName": { "Fn::Sub": "${OrderID}-ISRepo-ASG" },
+				"AutoScalingGroupName": { "Fn::Sub": "${ResourceTag}-ISRepo-ASG" },
 				"VPCZoneIdentifier": [
 					{ "Ref": "PrivateSubnet1ID" }
 				],
@@ -1068,7 +1050,7 @@
 				"MinSize": "1",
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-K8s-Worker-IS-Repo" },
+					"Value": { "Fn::Sub": "${ResourceTag}-K8s-Worker-IS-Repo" },
 					"PropagateAtLaunch": true
 				}]
 			},
@@ -1081,7 +1063,7 @@
 		"ISEngineLaunchTemplate": {
 			"Type": "AWS::EC2::LaunchTemplate",
 			"Properties": {
-				"LaunchTemplateName": { "Fn::Sub": "${OrderID}-ISEngine-LT" },
+				"LaunchTemplateName": { "Fn::Sub": "${ResourceTag}-ISEngine-LT" },
 				"LaunchTemplateData": {
 					"BlockDeviceMappings": [{
 						"DeviceName": "/dev/sda1",
@@ -1136,7 +1118,7 @@
 									" --stack ", { "Ref": "AWS::StackName" },
 									" --resource ISEngineASGroup ",
 									" --region ", { "Ref": "AWS::Region" }, "\n",
-									{ "Fn::Sub": "/tmp/register_new_worker.sh ${OrderID} is-engine \n" }
+									{ "Fn::Sub": "/tmp/register_new_worker.sh ${ResourceTag} is-engine \n" }
 								]
 							]
 						}
@@ -1147,7 +1129,7 @@
 		"ISEngineASGroup": {
 			"Type": "AWS::AutoScaling::AutoScalingGroup",
 			"Properties": {
-				"AutoScalingGroupName": { "Fn::Sub": "${OrderID}-ISEngine-ASG" },
+				"AutoScalingGroupName": { "Fn::Sub": "${ResourceTag}-ISEngine-ASG" },
 				"VPCZoneIdentifier": [
 					{ "Ref": "PrivateSubnet1ID" }
 				],
@@ -1163,7 +1145,7 @@
 				"MinSize": "1",
 				"Tags": [{
 					"Key": "Name",
-					"Value": { "Fn::Sub": "${OrderID}-K8s-Worker-IS-Engine" },
+					"Value": { "Fn::Sub": "${ResourceTag}-K8s-Worker-IS-Engine" },
 					"PropagateAtLaunch": true
 				}]
 			},
@@ -1176,7 +1158,7 @@
 		"ProxyTargetGroup": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
-				"Name": { "Fn::Sub": "${OrderID}-ProxyTG" },
+				"Name": { "Fn::Sub": "${ResourceTag}-ProxyTG" },
 				"Port": 32500,
 				"Protocol": "TCP",
 				"Targets": [{
@@ -1210,7 +1192,7 @@
 		"ProxyTargetGroup2": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
-				"Name": { "Fn::Sub": "${OrderID}-ProxyTG2" },
+				"Name": { "Fn::Sub": "${ResourceTag}-ProxyTG2" },
 				"Port": 32501,
 				"Protocol": "TCP",
 				"Targets": [{
@@ -1244,7 +1226,7 @@
 		"ProxyTargetGroup3": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
-				"Name": { "Fn::Sub": "${OrderID}-ProxyTG3" },
+				"Name": { "Fn::Sub": "${ResourceTag}-ProxyTG3" },
 				"Port": 32502,
 				"Protocol": "TCP",
 				"Targets": [{
@@ -1278,7 +1260,7 @@
 		"MasterNLB": {
 			"Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
 			"Properties": {
-				"Name": { "Fn::Sub": "${OrderID}-master" },
+				"Name": { "Fn::Sub": "${ResourceTag}-master" },
 				"Scheme": "internal",
 				"Subnets": [
 					{ "Ref": "PrivateSubnet1ID" },
@@ -1292,7 +1274,7 @@
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
 				"HealthCheckIntervalSeconds": 10,
-				"Name": { "Fn::Sub": "${OrderID}-MasterTG" },
+				"Name": { "Fn::Sub": "${ResourceTag}-MasterTG" },
 				"Port": 6443,
 				"Protocol": "TCP",
 				"Targets": [{
@@ -1328,7 +1310,7 @@
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
 				"HealthCheckIntervalSeconds": 10,
-				"Name": { "Fn::Sub": "${OrderID}-DockerRepoTG" },
+				"Name": { "Fn::Sub": "${ResourceTag}-DockerRepoTG" },
 				"Port": 5000,
 				"Protocol": "TCP",
 				"Targets": [{
@@ -1364,7 +1346,7 @@
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
 				"HealthCheckIntervalSeconds": 10,
-				"Name": { "Fn::Sub": "${OrderID}-NWLTG" },
+				"Name": { "Fn::Sub": "${ResourceTag}-NWLTG" },
 				"Port": 8080,
 				"Protocol": "TCP",
 				"Targets": [{
@@ -1399,7 +1381,7 @@
 		"MasterNLBParam": {
 			"Type": "AWS::SSM::Parameter",
 			"Properties": {
-				"Name": { "Fn::Sub": "/${OrderID}/master_nlb_dnsname" },
+				"Name": { "Fn::Sub": "/${ResourceTag}/master_nlb_dnsname" },
 				"Type": "String",
 				"Value": {
 					"Fn::GetAtt": ["MasterNLB", "DNSName"]

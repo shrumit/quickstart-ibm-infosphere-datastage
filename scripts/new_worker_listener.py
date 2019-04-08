@@ -42,6 +42,7 @@ class myHandler(BaseHTTPRequestHandler):
             out_file.write(json.dumps(data))
             out_file.close()
             subprocess.call(['/disk1/quickstart/installer/DS-Kube-Installer/addNodes.sh', CWD], cwd=CWD)
+            subprocess.call(['/disk1/quickstart/installer/DS-Kube-Installer/deleteDeadNodes.sh', CWD], cwd=CWD)
             self.send_response(200)
             self.end_headers()
             self.wfile.write('Receipt success')

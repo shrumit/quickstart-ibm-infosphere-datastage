@@ -53,7 +53,7 @@
                 },
                 "Parameters": [
                     "IISPassword",
-                    "OrderID"
+                    "ResourceTag"
                 ]
             }],
             "ParameterLabels": {
@@ -93,7 +93,7 @@
                 "NumberOfAZs": {
                     "default": "Number Of Availability Zones"
                 },
-                "OrderID": {
+                "ResourceTag": {
                     "default": "Order ID"
                 },
                 "PrivateSubnet1CIDR": {
@@ -311,7 +311,7 @@
             "Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
             "Type": "String"
         },
-        "OrderID": {
+        "ResourceTag": {
             "AllowedPattern": "[a-z0-9]+",
             "ConstraintDescription": "Non-empty; lower case letters and numbers",
             "Default": "ds1",
@@ -460,6 +460,51 @@
                 }
             }
         },
+        "BastionStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-linux-bastion/templates/linux-bastion.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "PublicSubnet1ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet2ID"
+                        ]
+                    },
+                    "PublicSubnet2ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet1ID"
+                        ]
+                    },
+                    "RemoteAccessCIDR": {
+                        "Ref": "AllowedPublicCIDR"
+                    },
+                    "VPCID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.VPCID"
+                        ]
+                    }
+                }
+            }
+        },
         "DataStageStack": {
             "Type": "AWS::CloudFormation::Stack",
             "Properties": {
@@ -480,6 +525,12 @@
                 "Parameters": {
                     "AllowedPublicCIDR": {
                         "Ref": "AllowedPublicCIDR"
+                    },
+                    "BastionSecurityGroupID": {
+                        "Fn::GetAtt": [
+                            "BastionStack",
+                            "Outputs.BastionSecurityGroupID"
+                        ]
                     },
                     "DSClientInstanceType": {
                         "Ref": "DSClientInstanceType"
@@ -511,37 +562,17 @@
                     "NumberOfAZs": {
                         "Ref": "NumberOfAZs"
                     },
-                    "OrderID": {
-                        "Ref": "OrderID"
+                    "ResourceTag": {
+                        "Ref": "ResourceTag"
                     },
                     "PrivateSubnet1CIDR": {
-                        "Fn::GetAtt": [
-                            "VPCStack",
-                            "Outputs.PrivateSubnet1ACIDR"
-                        ]
+                        "Ref": "PrivateSubnet1CIDR"
                     },
                     "PrivateSubnet2CIDR": {
-                        "Fn::GetAtt": [
-                            "VPCStack",
-                            "Outputs.PrivateSubnet2ACIDR"
-                        ]
+                        "Ref": "PrivateSubnet2CIDR"
                     },
                     "PrivateSubnet3CIDR": {
-                        "Fn::If": [
-                            "3AZCondition",
-                            {
-                                "Fn::GetAtt": [
-                                    "VPCStack",
-                                    "Outputs.PrivateSubnet3ACIDR"
-                                ]
-                            },
-                            {
-                                "Fn::GetAtt": [
-                                    "VPCStack",
-                                    "Outputs.PrivateSubnet2ACIDR"
-                                ]
-                            }
-                        ]
+                        "Ref": "PrivateSubnet3CIDR"
                     },
                     "PrivateSubnet1ID": {
                         "Fn::GetAtt": [
