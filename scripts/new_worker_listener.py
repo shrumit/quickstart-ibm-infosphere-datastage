@@ -7,6 +7,7 @@ import cgi
 import json
 import subprocess
 import sys
+import time
 
 PORT_NUMBER = 8080
 CWD = '/disk1/quickstart/installer/DS-Kube-Installer'
@@ -34,6 +35,8 @@ class myHandler(BaseHTTPRequestHandler):
             )
             print 'ip:%s, hostname:%s, label:%s' % (form['ip'].value, form['hostname'].value, form['label'].value)
             sys.stdout.flush()
+            if form['label'].value == 'is-engine':
+                time.sleep(300)
             in_file = open('/disk1/quickstart/nodes.json', 'r')
             out_file = open('/disk1/quickstart/installer/DS-Kube-Installer/nodes.json', 'w')
             data = json.loads(in_file.read())
@@ -41,8 +44,8 @@ class myHandler(BaseHTTPRequestHandler):
             data['workerNodeHost'][0]['label'] = form['label'].value
             out_file.write(json.dumps(data))
             out_file.close()
-            subprocess.call(['/disk1/quickstart/installer/DS-Kube-Installer/addNodes.sh', CWD], cwd=CWD)
-            subprocess.call(['/disk1/quickstart/installer/DS-Kube-Installer/deleteDeadNodes.sh', CWD], cwd=CWD)
+            subprocess.Popen(['/disk1/quickstart/installer/DS-Kube-Installer/addNodes.sh', CWD], cwd=CWD)
+            # subprocess.call(['/disk1/quickstart/installer/DS-Kube-Installer/deleteDeadNodes.sh', CWD], cwd=CWD)
             self.send_response(200)
             self.end_headers()
             self.wfile.write('Receipt success')

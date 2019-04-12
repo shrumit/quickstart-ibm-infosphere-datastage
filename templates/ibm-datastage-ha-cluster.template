@@ -18,7 +18,7 @@
 			"Description": "ID of the Elastic File System to be mounted to the cluster",
 			"Type": "String"
 		},
-		"IBMClientNumber": {
+		"IBMCustomerNumber": {
 			"AllowedPattern": "[0-9]+",
 			"NoEcho": "true",
 			"Description": "ICN associated with your license",
@@ -180,12 +180,6 @@
 			"Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
 			"Type": "String"
 		},
-		"ResourceTag": {
-			"AllowedPattern": "[a-z0-9]+",
-			"ConstraintDescription": "Non-empty; lower case letters and numbers",
-			"Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
-			"Type": "String"
-		},
 		"PrivateSubnet1ID": {
 			"Description": "ID of private subnet in Availability Zone 1",
 			"Type": "AWS::EC2::Subnet::Id"
@@ -214,6 +208,12 @@
 			"Description": "S3 key prefix for the Quick Start assets",
 			"Type": "String"
 		},
+        "ResourceTag": {
+            "AllowedPattern": "[a-z0-9]+",
+            "ConstraintDescription": "Non-empty; lower case letters and numbers",
+            "Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
+            "Type": "String"
+        },
 		"VPCID": {
 			"Description": "ID of your existing VPC for deployment",
 			"Type": "AWS::EC2::VPC::Id"
@@ -710,7 +710,7 @@
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMClientNumber} ${IBMPartNumber} ${AWS::Region}" },
+								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMCustomerNumber} ${IBMPartNumber} ${AWS::Region}" },
 								"env": { "HOME": "/root" }
 							}
 						}
@@ -1036,7 +1036,8 @@
 			"Properties": {
 				"AutoScalingGroupName": { "Fn::Sub": "${ResourceTag}-ISRepo-ASG" },
 				"VPCZoneIdentifier": [
-					{ "Ref": "PrivateSubnet1ID" }
+					{ "Ref": "PrivateSubnet1ID" },
+					{ "Ref": "PrivateSubnet2ID" }
 				],
 				"Cooldown": "1000",
 				"DesiredCapacity": "1",
@@ -1131,7 +1132,8 @@
 			"Properties": {
 				"AutoScalingGroupName": { "Fn::Sub": "${ResourceTag}-ISEngine-ASG" },
 				"VPCZoneIdentifier": [
-					{ "Ref": "PrivateSubnet1ID" }
+					{ "Ref": "PrivateSubnet1ID" },
+					{ "Ref": "PrivateSubnet2ID" }
 				],
 				"Cooldown": "1000",
 				"DesiredCapacity": "1",
@@ -1141,7 +1143,7 @@
 					"LaunchTemplateId": { "Ref": "ISEngineLaunchTemplate" },
 					"Version": { "Fn::GetAtt": ["ISEngineLaunchTemplate", "DefaultVersionNumber"] }
 				},
-				"MaxSize": "1",
+				"MaxSize": "10",
 				"MinSize": "1",
 				"Tags": [{
 					"Key": "Name",

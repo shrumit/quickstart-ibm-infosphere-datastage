@@ -9,7 +9,7 @@
                 },
                 "Parameters": [
                     "LicenseAgreement",
-                    "IBMClientNumber",
+                    "IBMCustomerNumber",
                     "IBMPartNumber"
                 ]
             }, {
@@ -66,8 +66,8 @@
                 "DSClientInstanceType": {
                     "default": "InfoSphere DataStage Client instance type"
                 },
-                "IBMClientNumber": {
-                    "default": "IBM Client Number (ICN)"
+                "IBMCustomerNumber": {
+                    "default": "IBM Customer Number (ICN)"
                 },
                 "IBMPartNumber": {
                     "default": "IBM part number"
@@ -91,10 +91,7 @@
                     "default": "License Agreement"
                 },
                 "NumberOfAZs": {
-                    "default": "Number Of Availability Zones"
-                },
-                "ResourceTag": {
-                    "default": "Order ID"
+                    "default": "Number of Availability Zones"
                 },
                 "PrivateSubnet1CIDR": {
                     "default": "Private subnet 1 CIDR"
@@ -119,6 +116,9 @@
                 },
                 "QSS3KeyPrefix": {
                     "default": "Quick Start S3 key prefix"
+                },
+                "ResourceTag": {
+                    "default": "Resource tag"
                 },
                 "VPCCIDR": {
                     "default": "The CIDR block for the VPC"
@@ -153,7 +153,7 @@
             "Description": "Type of EC2 instance for the DataStage Windows Client instance",
             "Type": "String"
         },
-        "IBMClientNumber": {
+        "IBMCustomerNumber": {
             "AllowedPattern": "[0-9]+",
             "Description": "ICN associated with your license",
             "NoEcho": "true",
@@ -311,13 +311,6 @@
             "Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
             "Type": "String"
         },
-        "ResourceTag": {
-            "AllowedPattern": "[a-z0-9]+",
-            "ConstraintDescription": "Non-empty; lower case letters and numbers",
-            "Default": "ds1",
-            "Description": "This will be used to label AWS resources and the DataStage Kubernetes namespace. Ensure that every InfoSphere DataStage deployment on your AWS account uses a unique Order ID.",
-            "Type": "String"
-        },
         "PrivateSubnet1CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
@@ -372,6 +365,13 @@
             "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Default": "quickstart-ibm-infosphere-datastage/",
             "Description": "S3 key prefix for the Quick Start assets",
+            "Type": "String"
+        },
+        "ResourceTag": {
+            "AllowedPattern": "[a-z0-9]+",
+            "ConstraintDescription": "Non-empty; lower case letters and numbers",
+            "Default": "ds1",
+            "Description": "This will be used to label AWS resources and the DataStage Kubernetes namespace. Ensure that every InfoSphere DataStage deployment on your AWS account uses a unique resource tag.",
             "Type": "String"
         },
         "VPCCIDR": {
@@ -535,8 +535,8 @@
                     "DSClientInstanceType": {
                         "Ref": "DSClientInstanceType"
                     },
-                    "IBMClientNumber": {
-                        "Ref": "IBMClientNumber"
+                    "IBMCustomerNumber": {
+                        "Ref": "IBMCustomerNumber"
                     },
                     "IBMPartNumber": {
                         "Ref": "IBMPartNumber"
@@ -561,9 +561,6 @@
                     },
                     "NumberOfAZs": {
                         "Ref": "NumberOfAZs"
-                    },
-                    "ResourceTag": {
-                        "Ref": "ResourceTag"
                     },
                     "PrivateSubnet1CIDR": {
                         "Ref": "PrivateSubnet1CIDR"
@@ -637,6 +634,9 @@
                     },
                     "QSS3KeyPrefix": {
                         "Ref": "QSS3KeyPrefix"
+                    },
+                    "ResourceTag": {
+                        "Ref": "ResourceTag"
                     },
                     "VPCID": {
                         "Fn::GetAtt": [

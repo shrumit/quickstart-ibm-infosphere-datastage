@@ -5,7 +5,7 @@
     },
     {
         "ParameterKey": "AvailabilityZones",
-        "ParameterValue": "$[taskcat_genaz_3]"
+        "ParameterValue": "$[taskcat_genaz_2]"
     },
     {
         "ParameterKey": "IBMCustomerNumber",
@@ -28,7 +28,15 @@
         "ParameterValue": "I agree"
     },
     {
+        "ParameterKey": "NumberOfAZs",
+        "ParameterValue": "2"
+    },
+    {
         "ParameterKey": "QSS3BucketName",
         "ParameterValue": "$[taskcat_autobucket]"
+    },
+    {
+        "ParameterKey": "ResourceTag",
+        "ParameterValue": "ds2"
     }
 ]

@@ -15,13 +15,6 @@
             "Description": "Number of Availability Zones to use in the VPC. This must match your selections in the list of Availability Zones parameter.",
             "Type": "String"
         },
-        "ResourceTag": {
-            "AllowedPattern": "[A-Za-z0-9]+",
-            "ConstraintDescription": "Non-empty; alphanumeric characters",
-            "Default": "DS1",
-            "Description": "Resource names will be prepended with order ID",
-            "Type": "String"
-        },
         "PrivateSubnet1ID": {
             "Description": "ID of private subnet in Availability Zone 1",
             "Type": "AWS::EC2::Subnet::Id"
@@ -33,6 +26,13 @@
         "PrivateSubnet3ID": {
             "Description": "ID of private subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
             "Type": "AWS::EC2::Subnet::Id"
+        },
+        "ResourceTag": {
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "Non-empty; alphanumeric characters",
+            "Default": "DS1",
+            "Description": "Resource names will be prepended with order ID",
+            "Type": "String"
         }
     },
     "Conditions": {

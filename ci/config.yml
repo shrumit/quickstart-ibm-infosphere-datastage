@@ -25,7 +25,13 @@ tests:
       - ap-southeast-2
       - eu-central-1
       - eu-west-1
-      #- eu-west-2
+      - eu-west-2
       - us-east-1
       - us-east-2
       - us-west-2
+  ds-master-2az:
+    parameter_input: ds-master-2az-parameters.json
+    template_file: ibm-datastage-master.template
+    regions:
+      - us-west-1
+      - us-east-1
