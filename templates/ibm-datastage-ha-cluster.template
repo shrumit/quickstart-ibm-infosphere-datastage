@@ -1160,6 +1160,7 @@
 		"ProxyTargetGroup": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
+				"HealthCheckIntervalSeconds": 10,
 				"Name": { "Fn::Sub": "${ResourceTag}-ProxyTG" },
 				"Port": 32500,
 				"Protocol": "TCP",
@@ -1194,6 +1195,7 @@
 		"ProxyTargetGroup2": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
+				"HealthCheckIntervalSeconds": 10,
 				"Name": { "Fn::Sub": "${ResourceTag}-ProxyTG2" },
 				"Port": 32501,
 				"Protocol": "TCP",
@@ -1228,6 +1230,7 @@
 		"ProxyTargetGroup3": {
 			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
 			"Properties": {
+				"HealthCheckIntervalSeconds": 10,
 				"Name": { "Fn::Sub": "${ResourceTag}-ProxyTG3" },
 				"Port": 32502,
 				"Protocol": "TCP",

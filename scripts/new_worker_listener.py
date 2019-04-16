@@ -36,7 +36,7 @@ class myHandler(BaseHTTPRequestHandler):
             print 'ip:%s, hostname:%s, label:%s' % (form['ip'].value, form['hostname'].value, form['label'].value)
             sys.stdout.flush()
             if form['label'].value == 'is-engine':
-                time.sleep(300)
+                time.sleep(400)
             in_file = open('/disk1/quickstart/nodes.json', 'r')
             out_file = open('/disk1/quickstart/installer/DS-Kube-Installer/nodes.json', 'w')
             data = json.loads(in_file.read())
