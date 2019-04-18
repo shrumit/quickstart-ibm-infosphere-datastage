@@ -5,23 +5,33 @@ global:
   regions:
     - ap-northeast-1
     - ap-northeast-2
-    - ap-south-1
     - ap-southeast-1
     - ap-southeast-2
-    - ca-central-1
     - eu-central-1
     - eu-west-1
-    - sa-east-1
+    - eu-west-2
     - us-east-1
     - us-east-2
     - us-west-1
     - us-west-2
   reporting: true
- 
 tests:
-  quickstart-ibm-infosphere-datastaget1:
-    parameter_input: quickstart-ibm-infosphere-datastage-example-params1.json
-    template_file: quickstart-ibm-infosphere-datastage-example1.template
-  quickstart-ibm-infosphere-datastaget2:
-    parameter_input: quickstart-ibm-infosphere-datastage-example-params2.json
-    template_file: quickstart-ibm-infosphere-datastage-example2.template
+  ds-master-3az:
+    parameter_input: ds-master-3az-parameters.json
+    template_file: ibm-datastage-master.template
+    regions:
+      - ap-northeast-1
+      - ap-southeast-1
+      - ap-southeast-2
+      - eu-central-1
+      - eu-west-1
+      - eu-west-2
+      - us-east-1
+      - us-east-2
+      - us-west-2
+  ds-master-2az:
+    parameter_input: ds-master-2az-parameters.json
+    template_file: ibm-datastage-master.template
+    regions:
+      - us-west-1
+      - us-east-1

@@ -1,0 +1,92 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This template creates an EFS, associated Security Group, and Mount Targets. You will be billed for the AWS resources used if you create a stack from this template.",
+    "Parameters": {
+        "MountTargetSecurityGroupID":{
+            "Description": "ID of Mount Target Security Group",
+            "Type": "AWS::EC2::SecurityGroup::Id"
+        },
+        "NumberOfAZs": {
+            "AllowedValues": [
+                "2",
+                "3"
+            ],
+            "Default": "3",
+            "Description": "Number of Availability Zones to use in the VPC. This must match your selections in the list of Availability Zones parameter.",
+            "Type": "String"
+        },
+        "PrivateSubnet1ID": {
+            "Description": "ID of private subnet in Availability Zone 1",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PrivateSubnet2ID": {
+            "Description": "ID of private subnet in Availability Zone 2",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PrivateSubnet3ID": {
+            "Description": "ID of private subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "ResourceTag": {
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "ConstraintDescription": "Non-empty; alphanumeric characters",
+            "Default": "DS1",
+            "Description": "Resource names will be prepended with order ID",
+            "Type": "String"
+        }
+    },
+    "Conditions": {
+        "3AZCondition": {
+            "Fn::Equals": [
+                { "Ref": "NumberOfAZs" },
+                "3"
+            ]
+        }
+    },
+    "Resources": {
+        "FileSystem": {
+            "Type": "AWS::EFS::FileSystem",
+            "Properties": {
+                "Encrypted": true,
+                "PerformanceMode": "generalPurpose",
+                "FileSystemTags": [{
+                    "Key": "Name",
+                    "Value": { "Fn::Sub": "${ResourceTag}-efs" }
+                }]
+            }
+        },
+        "MountTarget1": {
+            "Type": "AWS::EFS::MountTarget",
+            "Properties": {
+                "FileSystemId": { "Ref": "FileSystem" },
+                "SubnetId": { "Ref": "PrivateSubnet1ID" },
+                "SecurityGroups": [{ "Ref": "MountTargetSecurityGroupID" }]
+            }
+        },
+        "MountTarget2": {
+            "Type": "AWS::EFS::MountTarget",
+            "Properties": {
+                "FileSystemId": { "Ref": "FileSystem" },
+                "SubnetId": { "Ref": "PrivateSubnet2ID" },
+                "SecurityGroups": [{ "Ref": "MountTargetSecurityGroupID" }]
+            }
+        },
+        "MountTarget3": {
+            "Condition": "3AZCondition",
+            "Type": "AWS::EFS::MountTarget",
+            "Properties": {
+                "FileSystemId": { "Ref": "FileSystem" },
+                "SubnetId": { "Ref": "PrivateSubnet3ID" },
+                "SecurityGroups": [{ "Ref": "MountTargetSecurityGroupID" }]
+            }
+        }
+    },
+    "Outputs": {
+        "EFSID": {
+            "Description": "EFS Resource ID",
+            "Value": {
+                "Ref": "FileSystem"
+            }
+        }
+    }
+}

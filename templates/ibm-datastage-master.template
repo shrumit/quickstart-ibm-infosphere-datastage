@@ -1,0 +1,662 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Creates IBM InfoSphere DataStage Quick Start as a Kubernetes cluster within a new VPC. This template creates EC2 instances and related resources. You will be billed for the AWS resources used if you create a stack from this template.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [{
+                "Label": {
+                    "default": "Licensing"
+                },
+                "Parameters": [
+                    "LicenseAgreement",
+                    "IBMCustomerNumber",
+                    "IBMPartNumber"
+                ]
+            }, {
+                "Label": {
+                    "default": "Quick Start Configuration"
+                },
+                "Parameters": [
+                    "QSS3BucketName",
+                    "QSS3KeyPrefix"
+                ]
+            }, {
+                "Label": {
+                    "default": "Network Configuration"
+                },
+                "Parameters": [
+                    "AvailabilityZones",
+                    "NumberOfAZs",
+                    "AllowedPublicCIDR",
+                    "PrivateSubnet1CIDR",
+                    "PrivateSubnet2CIDR",
+                    "PrivateSubnet3CIDR",
+                    "PublicSubnet1CIDR",
+                    "PublicSubnet2CIDR",
+                    "PublicSubnet3CIDR",
+                    "VPCCIDR"
+                ]
+            }, {
+                "Label": {
+                    "default": "EC2 Instance Configuration"
+                },
+                "Parameters": [
+                    "KeyPairName",
+                    "DSClientInstanceType",
+                    "ISRepoInstanceType",
+                    "ISEngineInstanceType",
+                    "K8sMasterInstanceType"
+                ]
+            }, {
+                "Label": {
+                    "default": "DataStage Application Configuration"
+                },
+                "Parameters": [
+                    "IISPassword",
+                    "ResourceTag"
+                ]
+            }],
+            "ParameterLabels": {
+                "AllowedPublicCIDR": {
+                    "default": "Allowed external access CIDR"
+                },
+                "AvailabilityZones": {
+                    "default": "Availability Zones"
+                },
+                "DSClientInstanceType": {
+                    "default": "InfoSphere DataStage Client instance type"
+                },
+                "IBMCustomerNumber": {
+                    "default": "IBM Customer Number (ICN)"
+                },
+                "IBMPartNumber": {
+                    "default": "IBM part number"
+                },
+                "IISPassword": {
+                    "default": "IBM InfoSphere password"
+                },
+                "ISRepoInstanceType": {
+                    "default": "InfoSphere DataStage Repo worker instance type"
+                },
+                "ISEngineInstanceType": {
+                    "default": "InfoSphere DataStage Engine worker instance type"
+                },
+                "K8sMasterInstanceType": {
+                    "default": "Kubernetes master instance type"
+                },
+                "KeyPairName": {
+                    "default": "Key pair name"
+                },
+                "LicenseAgreement": {
+                    "default": "License Agreement"
+                },
+                "NumberOfAZs": {
+                    "default": "Number of Availability Zones"
+                },
+                "PrivateSubnet1CIDR": {
+                    "default": "Private subnet 1 CIDR"
+                },
+                "PrivateSubnet2CIDR": {
+                    "default": "Private subnet 2 CIDR"
+                },
+                "PrivateSubnet3CIDR": {
+                    "default": "Private subnet 3 CIDR"
+                },
+                "PublicSubnet1CIDR": {
+                    "default": "Public subnet 1 CIDR"
+                },
+                "PublicSubnet2CIDR": {
+                    "default": "Public subnet 2 CIDR"
+                },
+                "PublicSubnet3CIDR": {
+                    "default": "Public subnet 3 CIDR"
+                },
+                "QSS3BucketName": {
+                    "default": "Quick Start S3 bucket name"
+                },
+                "QSS3KeyPrefix": {
+                    "default": "Quick Start S3 key prefix"
+                },
+                "ResourceTag": {
+                    "default": "Resource tag"
+                },
+                "VPCCIDR": {
+                    "default": "The CIDR block for the VPC"
+                }
+            }
+        }
+    },
+    "Parameters": {
+        "AllowedPublicCIDR": {
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Description": "The CIDR IP range that is permitted to access the cluster. It is recommended that this value be set to a trusted IP range.",
+            "Type": "String"
+        },
+        "AvailabilityZones": {
+            "Description": "List of Availability Zones to use for the subnets in the VPC. It is recommended that three AZs are selected but two will be accepted.",
+            "Type": "List<AWS::EC2::AvailabilityZone::Name>"
+        },
+        "DSClientInstanceType": {
+            "AllowedValues": [
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.large",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.xlarge",
+            "Description": "Type of EC2 instance for the DataStage Windows Client instance",
+            "Type": "String"
+        },
+        "IBMCustomerNumber": {
+            "AllowedPattern": "[0-9]+",
+            "Description": "ICN associated with your license",
+            "NoEcho": "true",
+            "Type": "String"
+        },
+        "IBMPartNumber": {
+            "Description": "Part number associated with your license",
+            "Type": "String"
+        },
+        "IISPassword": {
+            "Description": "Password to be set on the DataStage application for the username \"isadmin\"",
+            "Type": "String",
+            "MinLength": "8",
+            "MaxLength": "20",
+            "NoEcho": "true",
+            "AllowedPattern": "(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[\\p{Punct}])([0-9a-zA-Z\\p{Punct}]+)",
+            "ConstraintDescription": "Must be 8-20 characters, containing one number, one special character, one lower case and one upper case character."
+        },
+        "ISRepoInstanceType": {
+            "AllowedValues": [
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge",
+                "m5.12xlarge",
+                "m5.24xlarge",
+                "m5.metal",
+                "m5a.xlarge",
+                "m5a.2xlarge",
+                "m5a.4xlarge",
+                "m5a.12xlarge",
+                "m5a.12xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5.2xlarge",
+                "r5.4xlarge",
+                "r5.12xlarge",
+                "r5.24xlarge",
+                "r5a.large",
+                "r5a.xlarge",
+                "r5a.2xlarge",
+                "r5a.4xlarge",
+                "r5a.12xlarge",
+                "r5a.24xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "c5.9xlarge",
+                "c5.18xlarge",
+                "z1d.large",
+                "z1d.xlarge",
+                "z1d.2xlarge",
+                "z1d.3xlarge",
+                "z1d.6xlarge",
+                "z1d.12xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "m5.xlarge",
+            "Description": "Type of EC2 instance for IS Repo worker node instances.",
+            "Type": "String"
+        },
+        "ISEngineInstanceType": {
+            "AllowedValues": [
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge",
+                "m5.12xlarge",
+                "m5.24xlarge",
+                "m5.metal",
+                "m5a.xlarge",
+                "m5a.2xlarge",
+                "m5a.4xlarge",
+                "m5a.12xlarge",
+                "m5a.12xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5.2xlarge",
+                "r5.4xlarge",
+                "r5.12xlarge",
+                "r5.24xlarge",
+                "r5a.large",
+                "r5a.xlarge",
+                "r5a.2xlarge",
+                "r5a.4xlarge",
+                "r5a.12xlarge",
+                "r5a.24xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "c5.9xlarge",
+                "c5.18xlarge",
+                "z1d.large",
+                "z1d.xlarge",
+                "z1d.2xlarge",
+                "z1d.3xlarge",
+                "z1d.6xlarge",
+                "z1d.12xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "m5.xlarge",
+            "Description": "Type of EC2 instance for IS Engine worker node instances.",
+            "Type": "String"
+        },
+        "K8sMasterInstanceType": {
+            "AllowedValues": [
+                "a1.large",
+                "a1.xlarge",
+                "t3.small",
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.large",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5a.large",
+                "m5a.xlarge",
+                "m5a.2xlarge",
+                "r5.large",
+                "r5.xlarge",
+                "r5a.large",
+                "r5a.xlarge",
+                "c5.large",
+                "c5.xlarge",
+                "c5.2xlarge",
+                "c5.4xlarge",
+                "z1d.large",
+                "z1d.xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.large",
+            "Description": "Type of EC2 instance for the Kubernetes master node instances",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Description": "The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "LicenseAgreement": {
+            "Description": "I have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
+            "Type": "String",
+            "Default": "-",
+            "AllowedValues": [
+                "I agree",
+                "-"
+            ]
+        },
+        "NumberOfAZs": {
+            "AllowedValues": [
+                "2",
+                "3"
+            ],
+            "Default": "3",
+            "Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
+            "Type": "String"
+        },
+        "PrivateSubnet1CIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.0.0/19",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 1",
+            "Type": "String"
+        },
+        "PrivateSubnet2CIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.32.0/19",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 2",
+            "Type": "String"
+        },
+        "PrivateSubnet3CIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.64.0/19",
+            "Description": "The CIDR block for the private subnet located in Availability Zone 3",
+            "Type": "String"
+        },
+        "PublicSubnet1CIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.128.0/20",
+            "Description": "The CIDR block for the public subnet located in Availability Zone 1",
+            "Type": "String"
+        },
+        "PublicSubnet2CIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.144.0/20",
+            "Description": "The CIDR block for the public subnet located in Availability Zone 2",
+            "Type": "String"
+        },
+        "PublicSubnet3CIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.160.0/20",
+            "Description": "The CIDR block for the public subnet located in Availability Zone 3",
+            "Type": "String"
+        },
+        "QSS3BucketName": {
+            "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
+            "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
+            "Default": "aws-quickstart",
+            "Description": "S3 bucket name for the Quick Start assets",
+            "Type": "String"
+        },
+        "QSS3KeyPrefix": {
+            "AllowedPattern": "^[0-9a-zA-Z-/]*$",
+            "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Default": "quickstart-ibm-infosphere-datastage/",
+            "Description": "S3 key prefix for the Quick Start assets",
+            "Type": "String"
+        },
+        "ResourceTag": {
+            "AllowedPattern": "[a-z0-9]+",
+            "ConstraintDescription": "Non-empty; lower case letters and numbers",
+            "Default": "ds1",
+            "Description": "This will be used to label AWS resources and the DataStage Kubernetes namespace. Ensure that every InfoSphere DataStage deployment on your AWS account uses a unique resource tag.",
+            "Type": "String"
+        },
+        "VPCCIDR": {
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
+            "Default": "10.0.0.0/16",
+            "Description": "The CIDR block for the VPC to be created",
+            "Type": "String"
+        }
+    },
+    "Conditions": {
+        "3AZCondition": {
+            "Fn::Equals": [{
+                    "Ref": "NumberOfAZs"
+                },
+                "3"
+            ]
+        },
+        "GovCloudCondition": {
+            "Fn::Equals": [{
+                    "Ref": "AWS::Region"
+                },
+                "us-gov-west-1"
+            ]
+        }
+    },
+    "Rules": {
+        "LicenseAgreementRule": {
+            "Assertions": [{
+                "Assert": {
+                    "Fn::Contains": [
+                        ["I agree"],
+                        { "Ref": "LicenseAgreement" }
+                    ]
+                },
+                "AssertDescription": "User must agree to the terms of the license agreement."
+            }]
+        }
+    },
+    "Resources": {
+        "VPCStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-aws-vpc/templates/aws-vpc.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "AvailabilityZones": {
+                        "Fn::Join": [",", { "Ref": "AvailabilityZones" }]
+                    },
+                    "NumberOfAZs": {
+                        "Ref": "NumberOfAZs"
+                    },
+                    "PrivateSubnet1ACIDR": {
+                        "Ref": "PrivateSubnet1CIDR"
+                    },
+                    "PrivateSubnet2ACIDR": {
+                        "Ref": "PrivateSubnet2CIDR"
+                    },
+                    "PrivateSubnet3ACIDR": {
+                        "Ref": "PrivateSubnet3CIDR"
+                    },
+                    "PublicSubnet1CIDR": {
+                        "Ref": "PublicSubnet1CIDR"
+                    },
+                    "PublicSubnet2CIDR": {
+                        "Ref": "PublicSubnet2CIDR"
+                    },
+                    "PublicSubnet3CIDR": {
+                        "Ref": "PublicSubnet3CIDR"
+                    },
+                    "VPCCIDR": {
+                        "Ref": "VPCCIDR"
+                    }
+                }
+            }
+        },
+        "BastionStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-linux-bastion/templates/linux-bastion.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "PublicSubnet1ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet2ID"
+                        ]
+                    },
+                    "PublicSubnet2ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet1ID"
+                        ]
+                    },
+                    "RemoteAccessCIDR": {
+                        "Ref": "AllowedPublicCIDR"
+                    },
+                    "VPCID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.VPCID"
+                        ]
+                    }
+                }
+            }
+        },
+        "DataStageStack": {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "TemplateURL": {
+                    "Fn::Sub": [
+                        "https://${QSS3BucketName}.${QSS3Region}.amazonaws.com/${QSS3KeyPrefix}templates/ibm-datastage.template",
+                        {
+                            "QSS3Region": {
+                                "Fn::If": [
+                                    "GovCloudCondition",
+                                    "s3-us-gov-west-1",
+                                    "s3"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Parameters": {
+                    "AllowedPublicCIDR": {
+                        "Ref": "AllowedPublicCIDR"
+                    },
+                    "BastionSecurityGroupID": {
+                        "Fn::GetAtt": [
+                            "BastionStack",
+                            "Outputs.BastionSecurityGroupID"
+                        ]
+                    },
+                    "DSClientInstanceType": {
+                        "Ref": "DSClientInstanceType"
+                    },
+                    "IBMCustomerNumber": {
+                        "Ref": "IBMCustomerNumber"
+                    },
+                    "IBMPartNumber": {
+                        "Ref": "IBMPartNumber"
+                    },
+                    "IISPassword": {
+                        "Ref": "IISPassword"
+                    },
+                    "ISRepoInstanceType": {
+                        "Ref": "ISRepoInstanceType"
+                    },
+                    "ISEngineInstanceType": {
+                        "Ref": "ISEngineInstanceType"
+                    },
+                    "K8sMasterInstanceType": {
+                        "Ref": "K8sMasterInstanceType"
+                    },
+                    "KeyPairName": {
+                        "Ref": "KeyPairName"
+                    },
+                    "LicenseAgreement": {
+                        "Ref": "LicenseAgreement"
+                    },
+                    "NumberOfAZs": {
+                        "Ref": "NumberOfAZs"
+                    },
+                    "PrivateSubnet1CIDR": {
+                        "Ref": "PrivateSubnet1CIDR"
+                    },
+                    "PrivateSubnet2CIDR": {
+                        "Ref": "PrivateSubnet2CIDR"
+                    },
+                    "PrivateSubnet3CIDR": {
+                        "Ref": "PrivateSubnet3CIDR"
+                    },
+                    "PrivateSubnet1ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PrivateSubnet1AID"
+                        ]
+                    },
+                    "PrivateSubnet2ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PrivateSubnet2AID"
+                        ]
+                    },
+                    "PrivateSubnet3ID": {
+                        "Fn::If": [
+                            "3AZCondition",
+                            {
+                                "Fn::GetAtt": [
+                                    "VPCStack",
+                                    "Outputs.PrivateSubnet3AID"
+                                ]
+                            },
+                            {
+                                "Fn::GetAtt": [
+                                    "VPCStack",
+                                    "Outputs.PrivateSubnet2AID"
+                                ]
+                            }
+                        ]
+                    },
+                    "PublicSubnet1ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet1ID"
+                        ]
+                    },
+                    "PublicSubnet2ID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.PublicSubnet2ID"
+                        ]
+                    },
+                    "PublicSubnet3ID": {
+                        "Fn::If": [
+                            "3AZCondition",
+                            {
+                                "Fn::GetAtt": [
+                                    "VPCStack",
+                                    "Outputs.PublicSubnet3ID"
+                                ]
+                            },
+                            {
+                                "Fn::GetAtt": [
+                                    "VPCStack",
+                                    "Outputs.PublicSubnet2ID"
+                                ]
+                            }
+                        ]
+                    },
+                    "QSS3BucketName": {
+                        "Ref": "QSS3BucketName"
+                    },
+                    "QSS3KeyPrefix": {
+                        "Ref": "QSS3KeyPrefix"
+                    },
+                    "ResourceTag": {
+                        "Ref": "ResourceTag"
+                    },
+                    "VPCID": {
+                        "Fn::GetAtt": [
+                            "VPCStack",
+                            "Outputs.VPCID"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "LaunchpadURL": {
+            "Description": "URL for Launchpad",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DataStageStack",
+                    "Outputs.LaunchpadURL"
+                ]
+            }
+        }
+    }
+}

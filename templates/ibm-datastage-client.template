@@ -1,0 +1,217 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Creates the DataStage Windows Client in an Auto Scaling Group, and an Elastic Load Balancer for proxying. This template creates EC2 instances and related resources. You will be billed for the AWS resources used if you create a stack from this template.",
+    "Parameters": {
+        "DataStageClientSecurityGroupID": {
+            "Description": "ID of DataStage Client Security Group",
+            "Type": "AWS::EC2::SecurityGroup::Id"
+        },
+        "DSClientEIP": {
+            "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})",
+            "ConstraintDescription": "IP address must be in the form x.x.x.x",
+            "Description": "IP address of the EIP attached to the DataStage Client",
+            "Type": "String"
+        },
+        "DSClientInstanceType": {
+            "AllowedValues": [
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge",
+                "t3.2xlarge",
+                "m5.large",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge"
+            ],
+            "ConstraintDescription": "Must contain valid instance type",
+            "Default": "t3.xlarge",
+            "Description": "Type of EC2 instance for the DataStage Windows Client instance",
+            "Type": "String"
+        },
+        "KeyPairName": {
+            "Description": "The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "LicenseAgreement": {
+            "Description": "I have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
+            "Type": "String",
+            "Default": "-",
+            "AllowedValues": [
+                "I agree",
+                "-"
+            ]
+        },
+        "NumberOfAZs": {
+            "AllowedValues": [
+                "2",
+                "3"
+            ],
+            "Default": "3",
+            "Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
+            "Type": "String"
+        },
+        "PublicSubnet1ID": {
+            "Description": "ID of public subnet in Availability Zone 1",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PublicSubnet2ID": {
+            "Description": "ID of public subnet in Availability Zone 2",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "PublicSubnet3ID": {
+            "Description": "ID of public subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "ResourceTag": {
+            "AllowedPattern": "[a-z0-9]+",
+            "ConstraintDescription": "Non-empty; lower case letters and numbers",
+            "Default": "ds1",
+            "Description": "Will be used for naming resources and the DataStage Kubernetes namespace. Ensure that every deployment on your AWS account uses a unique Order ID.",
+            "Type": "String"
+        },
+        "VPCID": {
+            "Description": "ID of your existing VPC for deployment",
+            "Type": "AWS::EC2::VPC::Id"
+        }
+    },
+    "Conditions": {
+        "3AZCondition": {
+            "Fn::Equals": [{
+                    "Ref": "NumberOfAZs"
+                },
+                "3"
+            ]
+        }
+    },
+    "Mappings": {
+        "AWSAMIRegionMap": {
+            "eu-west-2": { "DSClientWin": "ami-0b7330e75bb3cf60f" },
+            "eu-west-1": { "DSClientWin": "ami-02820c631a80ca933" },
+            "ap-northeast-2": { "DSClientWin": "ami-0e2597999229c551b" },
+            "ap-northeast-1": { "DSClientWin": "ami-06606a63aa98d1e48" },
+            "ap-southeast-1": { "DSClientWin": "ami-0fa51129c40b37e54" },
+            "ap-southeast-2": { "DSClientWin": "ami-02a81b47f85f7fc74" },
+            "eu-central-1": { "DSClientWin": "ami-011d02d6c68a8c66a" },
+            "us-east-1": { "DSClientWin": "ami-096e0ea7b8b82ba07" },
+            "us-east-2": { "DSClientWin": "ami-010feb499288a5e15" },
+            "us-west-1": { "DSClientWin": "ami-0db11165d5d1ea394" },
+            "us-west-2": { "DSClientWin": "ami-01528b2b623ccf60a" }
+        }
+    },
+    "Rules": {
+        "LicenseAgreementRule": {
+            "Assertions": [{
+                "Assert": {
+                    "Fn::Contains": [
+                        ["I agree"],
+                        { "Ref": "LicenseAgreement" }
+                    ]
+                },
+                "AssertDescription": "User must agree to the terms of the license agreement."
+            }]
+        }
+    },
+    "Resources": {
+        "DataStageClientLaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": { "Fn::Sub": "${ResourceTag}-DSClientLT" },
+                "LaunchTemplateData": {
+                    "BlockDeviceMappings": [{
+                        "DeviceName": "/dev/sda1",
+                        "Ebs": {
+                            "VolumeSize": 200,
+                            "VolumeType": "gp2"
+                        }
+                    }],
+                    "ImageId": {
+                        "Fn::FindInMap": ["AWSAMIRegionMap", { "Ref": "AWS::Region" }, "DSClientWin"]
+                    },
+                    "InstanceType": { "Ref": "DSClientInstanceType" },
+                    "KeyName": { "Ref": "KeyPairName" },
+                    "SecurityGroupIds": [
+                        { "Ref": "DataStageClientSecurityGroupID" }
+                    ]
+                }
+            }
+        },
+        "DataStageClientInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "LaunchTemplate": {
+                    "LaunchTemplateId": { "Ref": "DataStageClientLaunchTemplate" },
+                    "Version": { "Fn::GetAtt": ["DataStageClientLaunchTemplate", "DefaultVersionNumber"] }
+                },
+                "SubnetId": { "Ref": "PublicSubnet1ID" },
+                "Tags": [{
+                    "Key": "Name",
+                    "Value": { "Fn::Sub": "${ResourceTag}-DS-Client" }
+                }]
+            }
+        },
+        "DSClientEIPAssociation": {
+            "Type": "AWS::EC2::EIPAssociation",
+            "Properties": {
+                "EIP": { "Ref": "DSClientEIP" },
+                "InstanceId": { "Ref": "DataStageClientInstance" }
+            }
+        },
+        "ProxyNLB": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": { "Fn::Sub": "${ResourceTag}-proxy" },
+                "Scheme": "internet-facing",
+                "Subnets": [
+                    { "Ref": "PublicSubnet1ID" },
+                    { "Ref": "PublicSubnet2ID" },
+                    { "Fn::If": ["3AZCondition", { "Ref": "PublicSubnet3ID" }, { "Ref": "AWS::NoValue" }] }
+                ],
+                "Type": "network"
+            }
+        },
+        "PrivateHostedZone": {
+            "Type": "AWS::Route53::HostedZone",
+            "Properties": {
+                "HostedZoneConfig": {
+                    "Comment": "Hosted zone for DataStage thick client"
+                },
+                "Name": "is-en-conductor-0.en-cond",
+                "VPCs": [{
+                    "VPCId": { "Ref": "VPCID" },
+                    "VPCRegion": { "Ref": "AWS::Region" }
+                }]
+            }
+        },
+        "ProxyRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Properties": {
+                "HostedZoneId": { "Ref": "PrivateHostedZone" },
+                "Comment": "DataStage-friendly DNS name for load balancer.",
+                "Name": "is-en-conductor-0.en-cond",
+                "Type": "A",
+                "AliasTarget": {
+                    "DNSName": { "Fn::GetAtt": ["ProxyNLB", "DNSName"] },
+                    "HostedZoneId": { "Fn::GetAtt": ["ProxyNLB", "CanonicalHostedZoneID"] }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "DataStageClientFQDN": {
+            "Value": { "Fn::GetAtt": ["DataStageClientInstance", "PrivateDnsName"] }
+        },
+        "DataStageClientPrivateIP": {
+            "Value": { "Fn::GetAtt": ["DataStageClientInstance", "PrivateIp"] }
+        },
+        "LaunchpadURL": {
+            "Description": "URL for Launchpad",
+            "Value": { "Fn::Sub": "https://${ProxyNLB.DNSName}:32500/ibm/iis/launchpad/" }
+        },
+        "ProxyNLB": {
+            "Value": { "Ref": "ProxyNLB" }
+        },
+        "ProxyNLBDomainName": {
+            "Value": { "Fn::GetAtt": ["ProxyNLB", "DNSName"] }
+        }
+    }
+}
