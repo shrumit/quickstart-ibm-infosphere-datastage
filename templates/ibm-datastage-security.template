@@ -147,6 +147,6 @@
         },
         "MasterNodeAddonSecurityGroupID": {
             "Value": { "Ref": "MasterNodeAddonSecurityGroup" }
-        },
+        }
     }
 }
