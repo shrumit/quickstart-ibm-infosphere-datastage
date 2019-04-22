@@ -28,6 +28,17 @@
             "Description": "Type of EC2 instance for the DataStage Windows Client instance",
             "Type": "String"
         },
+        "IBMCustomerNumber": {
+            "AllowedPattern": "[0-9]+",
+            "Description": "ICN associated with your license",
+            "NoEcho": "true",
+            "Type": "String"
+        },
+        "IBMDataStageClientPartNumber": {
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "Description": "Part number associated with your DataStage client license",
+            "Type": "String"
+        },
         "KeyPairName": {
             "Description": "The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches",
             "Type": "AWS::EC2::KeyPair::KeyName"
@@ -83,46 +94,6 @@
             ]
         }
     },
-    "Mappings": {
-        "AWSAMIRegionMap": {
-            "AMI": {
-                "DSClientWin": "DS-Client-Windows-April12_11.7-FP2_PROD"
-            },
-            "eu-west-2": {
-                "DSClientWin": "ami-0b7330e75bb3cf60f"
-            },
-            "eu-west-1": {
-                "DSClientWin": "ami-02820c631a80ca933"
-            },
-            "ap-northeast-2": {
-                "DSClientWin": "ami-0e2597999229c551b"
-            },
-            "ap-northeast-1": {
-                "DSClientWin": "ami-06606a63aa98d1e48"
-            },
-            "ap-southeast-1": {
-                "DSClientWin": "ami-0fa51129c40b37e54"
-            },
-            "ap-southeast-2": {
-                "DSClientWin": "ami-02a81b47f85f7fc74"
-            },
-            "eu-central-1": {
-                "DSClientWin": "ami-011d02d6c68a8c66a"
-            },
-            "us-east-1": {
-                "DSClientWin": "ami-096e0ea7b8b82ba07"
-            },
-            "us-east-2": {
-                "DSClientWin": "ami-010feb499288a5e15"
-            },
-            "us-west-1": {
-                "DSClientWin": "ami-0db11165d5d1ea394"
-            },
-            "us-west-2": {
-                "DSClientWin": "ami-01528b2b623ccf60a"
-            }
-        }
-    },
     "Rules": {
         "LicenseAgreementRule": {
             "Assertions": [{
@@ -137,6 +108,89 @@
         }
     },
     "Resources": {
+        "AMIInfo": {
+            "Type": "Custom::AMIInfo",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": ["AMIInfoFunction", "Arn"]
+                },
+                "ICN": { "Ref": "IBMCustomerNumber" },
+                "PartNumber": { "Ref": "IBMDataStageClientPartNumber" },
+                "Region": { "Ref": "AWS::Region" },
+                "AccountId": { "Ref": "AWS::AccountId" }
+            }
+        },
+        "AMIInfoFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Code": {
+                    "ZipFile": {
+                        "Fn::Join": ["\n", [
+                            "import botocore.vendored.requests as requests",
+                            "import cfnresponse",
+                            "import json",
+                            "ENDPOINT='https://arzw423wzk.execute-api.ca-central-1.amazonaws.com/default/ami_sharing'",
+                            "def handler(event, context):",
+                            "    responseData = {}",
+                            "    try:",
+                            "        if (event['RequestType'] == 'Delete' or event['RequestType'] == 'Update'):",
+                            "            print(event['RequestType'], 'request received.')",
+                            "            cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)",
+                            "            return",
+                            "        data = {",
+                            "            'icn': event['ResourceProperties']['ICN'],",
+                            "            'part_number': event['ResourceProperties']['PartNumber'],",
+                            "            'region': event['ResourceProperties']['Region'],",
+                            "            'account_id': event['ResourceProperties']['AccountId']",
+                            "        }",
+                            "        r = requests.post(ENDPOINT, json=data)",
+                            "        if r.status_code != 200:",
+                            "            print('**FAILURE_REASON: Validation API returned non-200 response code. Please ensure that ICN and Part Number are correct')",
+                            "            cfnresponse.send(event, context, cfnresponse.FAILED, responseData)",
+                            "            return",
+                            "        response = r.json()",
+                            "        responseData['Id']=response['ami_id']",
+                            "    except Exception as err:",
+                            "        print('**FAILURE_REASON:', type(err).__name__, str(err))",
+                            "        cfnresponse.send(event, context, cfnresponse.FAILED, responseData)",
+                            "    else:",
+                            "        cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)"
+                        ]]
+                    }
+                },
+                "Handler": "index.handler",
+                "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+                "Runtime": "python3.7",
+                "Timeout": 30
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": ["lambda.amazonaws.com"]
+                        },
+                        "Action": ["sts:AssumeRole"]
+                    }]
+                },
+                "Path": "/",
+                "Policies": [{
+                    "PolicyName": "root",
+                    "PolicyDocument": {
+                        "Version": "2012-10-17",
+                        "Statement": [{
+                            "Effect": "Allow",
+                            "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                            "Resource": "arn:aws:logs:*:*:*"
+                        }]
+                    }
+                }]
+            }
+        },
         "DataStageClientLaunchTemplate": {
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
@@ -150,7 +204,7 @@
                         }
                     }],
                     "ImageId": {
-                        "Fn::FindInMap": ["AWSAMIRegionMap", { "Ref": "AWS::Region" }, "DSClientWin"]
+                        "Fn::GetAtt": ["AMIInfo", "Id"]
                     },
                     "InstanceType": { "Ref": "DSClientInstanceType" },
                     "KeyName": { "Ref": "KeyPairName" },

@@ -40,7 +40,8 @@
                     "Parameters": [
                         "LicenseAgreement",
                         "IBMCustomerNumber",
-                        "IBMPartNumber"
+                        "IBMDataStageClientPartNumber",
+                        "IBMDataStagePartNumber"
                     ]
                 },
                 {
@@ -75,8 +76,11 @@
                 "IBMCustomerNumber": {
                     "default": "IBM Customer Number (ICN)"
                 },
-                "IBMPartNumber": {
-                    "default": "IBM part number"
+                "IBMDataStageClientPartNumber": {
+                    "default": "IBM part number for the InfoSphere DataStage Client"
+                },
+                "IBMDataStagePartNumber": {
+                    "default": "IBM part number for InfoSphere DataStage"
                 },
                 "IISPassword": {
                     "default": "InfoSphere DataStage password"
@@ -165,8 +169,14 @@
             "NoEcho": "true",
             "Type": "String"
         },
-        "IBMPartNumber": {
-            "Description": "Part number associated with your license.",
+        "IBMDataStageClientPartNumber": {
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "Description": "Part number associated with your DataStage client license",
+            "Type": "String"
+        },
+        "IBMDataStagePartNumber": {
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "Description": "Part number associated with your DataStage license",
             "Type": "String"
         },
         "IISPassword": {
@@ -544,8 +554,11 @@
                     "IBMCustomerNumber": {
                         "Ref": "IBMCustomerNumber"
                     },
-                    "IBMPartNumber": {
-                        "Ref": "IBMPartNumber"
+                    "IBMDataStageClientPartNumber": {
+                        "Ref": "IBMDataStageClientPartNumber"
+                    },
+                    "IBMDataStagePartNumber": {
+                        "Ref": "IBMDataStagePartNumber"
                     },
                     "IISPassword": {
                         "Ref": "IISPassword"
