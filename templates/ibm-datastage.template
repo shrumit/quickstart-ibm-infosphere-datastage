@@ -9,7 +9,6 @@
                         "default": "Network configuration"
                     },
                     "Parameters": [
-                        "NumberOfAZs",
                         "AllowedPublicCIDR",
                         "BastionSecurityGroupID",
                         "PrivateSubnet1ID",
@@ -103,9 +102,6 @@
                 },
                 "LicenseAgreement": {
                     "default": "License agreement"
-                },
-                "NumberOfAZs": {
-                    "default": "Number of Availability Zones"
                 },
                 "PrivateSubnet1CIDR": {
                     "default": "Private subnet 1 CIDR"
@@ -334,15 +330,6 @@
                 "-"
             ]
         },
-        "NumberOfAZs": {
-            "AllowedValues": [
-                "2",
-                "3"
-            ],
-            "Default": "3",
-            "Description": "Number of Availability Zones that the VPC spans.",
-            "Type": "String"
-        },
         "PrivateSubnet1CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
@@ -370,7 +357,7 @@
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PrivateSubnet3ID": {
-            "Description": "ID of private subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
+            "Description": "ID of private subnet in Availability Zone 3.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PublicSubnet1ID": {
@@ -382,7 +369,7 @@
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PublicSubnet3ID": {
-            "Description": "ID of public subnet in Availability Zone 3. If number of AZs is 2, a subnet must be selected to proceed but will be ignored.",
+            "Description": "ID of public subnet in Availability Zone 3.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "QSS3BucketName": {
@@ -420,10 +407,9 @@
     },
     "Conditions": {
         "3AZCondition": {
-            "Fn::Equals": [{
-                    "Ref": "NumberOfAZs"
-                },
-                "3"
+            "Fn::Equals": [
+                "true",
+                "true"
             ]
         },
         "GovCloudCondition": {
@@ -482,7 +468,11 @@
                         "Ref": "DSClientEIP"
                     },
                     "NumberOfAZs": {
-                        "Ref": "NumberOfAZs"
+                        "Fn::If": [
+                            "3AZCondition",
+                            "3",
+                            "2"
+                        ]
                     },
                     "PrivateSubnet1CIDR": {
                         "Ref": "PrivateSubnet1CIDR"
@@ -548,7 +538,11 @@
                         "Ref": "LicenseAgreement"
                     },
                     "NumberOfAZs": {
-                        "Ref": "NumberOfAZs"
+                        "Fn::If": [
+                            "3AZCondition",
+                            "3",
+                            "2"
+                        ]
                     },
                     "PublicSubnet1ID": {
                         "Ref": "PublicSubnet1ID"
@@ -597,7 +591,11 @@
                         ]
                     },
                     "NumberOfAZs": {
-                        "Ref": "NumberOfAZs"
+                        "Fn::If": [
+                            "3AZCondition",
+                            "3",
+                            "2"
+                        ]
                     },
                     "PrivateSubnet1ID": {
                         "Ref": "PrivateSubnet1ID"
@@ -691,7 +689,11 @@
                         ]
                     },
                     "NumberOfAZs": {
-                        "Ref": "NumberOfAZs"
+                        "Fn::If": [
+                            "3AZCondition",
+                            "3",
+                            "2"
+                        ]
                     },
                     "PrivateSubnet1ID": {
                         "Ref": "PrivateSubnet1ID"
