@@ -24,8 +24,9 @@
 			"Description": "ICN associated with your license",
 			"Type": "String"
 		},
-		"IBMPartNumber": {
-			"Description": "Part Number associated with your license",
+		"IBMDataStagePartNumber": {
+			"AllowedPattern": "[a-zA-Z0-9]+",
+			"Description": "Part number associated with your DataStage license",
 			"Type": "String"
 		},
 		"IISPassword": {
@@ -710,7 +711,7 @@
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMCustomerNumber} ${IBMPartNumber} ${AWS::Region}" },
+								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMCustomerNumber} ${IBMDataStagePartNumber} ${AWS::Region}" },
 								"env": { "HOME": "/root" }
 							}
 						}

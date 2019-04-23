@@ -12,7 +12,11 @@
         "ParameterValue": "051400"
     },
     {
-        "ParameterKey": "IBMPartNumber",
+        "ParameterKey": "IBMDataStageClientPartNumber",
+        "ParameterValue": "D1VLALL"
+    },
+    {
+        "ParameterKey": "IBMDataStagePartNumber",
         "ParameterValue": "D1VLALL"
     },
     {

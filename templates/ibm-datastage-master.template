@@ -10,7 +10,6 @@
                     },
                     "Parameters": [
                         "AvailabilityZones",
-                        "NumberOfAZs",
                         "AllowedPublicCIDR",
                         "PrivateSubnet1CIDR",
                         "PrivateSubnet2CIDR",
@@ -40,7 +39,8 @@
                     "Parameters": [
                         "LicenseAgreement",
                         "IBMCustomerNumber",
-                        "IBMPartNumber"
+                        "IBMDataStageClientPartNumber",
+                        "IBMDataStagePartNumber"
                     ]
                 },
                 {
@@ -75,8 +75,11 @@
                 "IBMCustomerNumber": {
                     "default": "IBM Customer Number (ICN)"
                 },
-                "IBMPartNumber": {
-                    "default": "IBM part number"
+                "IBMDataStageClientPartNumber": {
+                    "default": "IBM part number for the InfoSphere DataStage Client"
+                },
+                "IBMDataStagePartNumber": {
+                    "default": "IBM part number for InfoSphere DataStage"
                 },
                 "IISPassword": {
                     "default": "InfoSphere DataStage password"
@@ -95,9 +98,6 @@
                 },
                 "LicenseAgreement": {
                     "default": "License agreement"
-                },
-                "NumberOfAZs": {
-                    "default": "Number of Availability Zones"
                 },
                 "PrivateSubnet1CIDR": {
                     "default": "Private subnet 1 CIDR"
@@ -140,7 +140,7 @@
             "Type": "String"
         },
         "AvailabilityZones": {
-            "Description": "List of Availability Zones to use for the subnets in the VPC. It is recommended that three AZs are selected but two will be accepted.",
+            "Description": "List of Availability Zones to use for the subnets in the VPC. Three Availability Zones are used in this deployment, and the logical order of your selections is preserved.",
             "Type": "List<AWS::EC2::AvailabilityZone::Name>"
         },
         "DSClientInstanceType": {
@@ -165,8 +165,14 @@
             "NoEcho": "true",
             "Type": "String"
         },
-        "IBMPartNumber": {
-            "Description": "Part number associated with your license.",
+        "IBMDataStageClientPartNumber": {
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "Description": "Part number associated with your DataStage client license",
+            "Type": "String"
+        },
+        "IBMDataStagePartNumber": {
+            "AllowedPattern": "[a-zA-Z0-9]+",
+            "Description": "Part number associated with your DataStage license",
             "Type": "String"
         },
         "IISPassword": {
@@ -308,15 +314,6 @@
                 "-"
             ]
         },
-        "NumberOfAZs": {
-            "AllowedValues": [
-                "2",
-                "3"
-            ],
-            "Default": "3",
-            "Description": "Number of Availability Zones to use in the VPC. This must match the number of selections in the Availability Zones parameter.",
-            "Type": "String"
-        },
         "PrivateSubnet1CIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
@@ -390,10 +387,9 @@
     },
     "Conditions": {
         "3AZCondition": {
-            "Fn::Equals": [{
-                    "Ref": "NumberOfAZs"
-                },
-                "3"
+            "Fn::Equals": [
+                "true",
+                "true"
             ]
         },
         "GovCloudCondition": {
@@ -440,7 +436,11 @@
                         "Fn::Join": [",", { "Ref": "AvailabilityZones" }]
                     },
                     "NumberOfAZs": {
-                        "Ref": "NumberOfAZs"
+                        "Fn::If": [
+                            "3AZCondition",
+                            "3",
+                            "2"
+                        ]
                     },
                     "PrivateSubnet1ACIDR": {
                         "Ref": "PrivateSubnet1CIDR"
@@ -544,8 +544,11 @@
                     "IBMCustomerNumber": {
                         "Ref": "IBMCustomerNumber"
                     },
-                    "IBMPartNumber": {
-                        "Ref": "IBMPartNumber"
+                    "IBMDataStageClientPartNumber": {
+                        "Ref": "IBMDataStageClientPartNumber"
+                    },
+                    "IBMDataStagePartNumber": {
+                        "Ref": "IBMDataStagePartNumber"
                     },
                     "IISPassword": {
                         "Ref": "IISPassword"
@@ -564,9 +567,6 @@
                     },
                     "LicenseAgreement": {
                         "Ref": "LicenseAgreement"
-                    },
-                    "NumberOfAZs": {
-                        "Ref": "NumberOfAZs"
                     },
                     "PrivateSubnet1CIDR": {
                         "Ref": "PrivateSubnet1CIDR"
