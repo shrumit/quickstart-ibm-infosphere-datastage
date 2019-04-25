@@ -21,7 +21,7 @@
     },
     {
         "ParameterKey": "IISPassword",
-        "ParameterValue": "Password@123"
+        "ParameterValue": "$[taskcat_genpass_12A]"
     },
     {
         "ParameterKey": "KeyPairName",
