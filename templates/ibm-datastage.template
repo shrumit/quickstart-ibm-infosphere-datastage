@@ -10,6 +10,8 @@
                     },
                     "Parameters": [
                         "AllowedPublicCIDR",
+                        "VPCID",
+                        "VPCCIDR",
                         "BastionSecurityGroupID",
                         "PrivateSubnet1ID",
                         "PrivateSubnet2ID",
@@ -17,11 +19,9 @@
                         "PublicSubnet1ID",
                         "PublicSubnet2ID",
                         "PublicSubnet3ID",
-                        "VPCID",
                         "PrivateSubnet1CIDR",
                         "PrivateSubnet2CIDR",
-                        "PrivateSubnet3CIDR",
-                        "VPCCIDR"
+                        "PrivateSubnet3CIDR"
                     ]
                 },
                 {
@@ -140,7 +140,7 @@
                     "default": "Resource tag"
                 },
                 "VPCCIDR": {
-                    "default": "The CIDR block of the VPC"
+                    "default": "VPC CIDR"
                 },
                 "VPCID": {
                     "default": "VPC ID"
@@ -172,7 +172,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "t3.xlarge",
-            "Description": "Type of EC2 instance for the DataStage Windows client instance.",
+            "Description": "The type of EC2 instance for the DataStage Windows client instance.",
             "Type": "String"
         },
         "IBMCustomerNumber": {
@@ -192,7 +192,7 @@
             "Type": "String"
         },
         "IISPassword": {
-            "Description": "Password to be set on the DataStage application for the username \"isadmin\".",
+            "Description": "The password to be set on the DataStage application for the user name \"isadmin\".",
             "Type": "String",
             "MinLength": "8",
             "MaxLength": "20",
@@ -240,7 +240,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "Type of EC2 instance for IS Repo worker node instances.",
+            "Description": "The type of EC2 instance for the IS Repo worker node instances.",
             "Type": "String"
         },
         "ISEngineInstanceType": {
@@ -283,7 +283,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "Type of EC2 instance for IS Engine worker node instances.",
+            "Description": "The type of EC2 instance for the IS Engine worker node instances.",
             "Type": "String"
         },
         "K8sMasterInstanceType": {
@@ -314,7 +314,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "t3.large",
-            "Description": "Type of EC2 instance for the Kubernetes master node instances.",
+            "Description": "The type of EC2 instance for the Kubernetes master node instances.",
             "Type": "String"
         },
         "KeyPairName": {
@@ -322,7 +322,7 @@
             "Type": "AWS::EC2::KeyPair::KeyName"
         },
         "LicenseAgreement": {
-            "Description": "I have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
+            "Description": "Choose Accept to acknowledge that you have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
             "Type": "String",
             "Default": "-",
             "AllowedValues": [
@@ -349,27 +349,27 @@
             "Type": "String"
         },
         "PrivateSubnet1ID": {
-            "Description": "ID of private subnet in Availability Zone 1.",
+            "Description": "The ID of the private subnet in Availability Zone 1.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PrivateSubnet2ID": {
-            "Description": "ID of private subnet in Availability Zone 2.",
+            "Description": "The ID of the private subnet in Availability Zone 2.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PrivateSubnet3ID": {
-            "Description": "ID of private subnet in Availability Zone 3.",
+            "Description": "The ID of the private subnet in Availability Zone 3.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PublicSubnet1ID": {
-            "Description": "ID of public subnet in Availability Zone 1.",
+            "Description": "The ID of the public subnet in Availability Zone 1.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PublicSubnet2ID": {
-            "Description": "ID of public subnet in Availability Zone 2.",
+            "Description": "The ID of the public subnet in Availability Zone 2.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "PublicSubnet3ID": {
-            "Description": "ID of public subnet in Availability Zone 3.",
+            "Description": "The ID of the public subnet in Availability Zone 3.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "QSS3BucketName": {
@@ -396,12 +396,11 @@
         "VPCCIDR": {
             "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
-            "Default": "10.0.0.0/16",
-            "Description": "The CIDR block of the VPC.",
+            "Description": "The CIDR block of your existing VPC.",
             "Type": "String"
         },
         "VPCID": {
-            "Description": "ID of your existing VPC for deployment.",
+            "Description": "The ID of your existing VPC for deployment.",
             "Type": "AWS::EC2::VPC::Id"
         }
     },

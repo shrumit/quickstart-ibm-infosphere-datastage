@@ -6,18 +6,18 @@
             "ParameterGroups": [
                 {
                     "Label": {
-                        "default": "Network configuration"
+                        "default": "VPC network configuration"
                     },
                     "Parameters": [
                         "AvailabilityZones",
                         "AllowedPublicCIDR",
+                        "VPCCIDR",
                         "PrivateSubnet1CIDR",
                         "PrivateSubnet2CIDR",
                         "PrivateSubnet3CIDR",
                         "PublicSubnet1CIDR",
                         "PublicSubnet2CIDR",
-                        "PublicSubnet3CIDR",
-                        "VPCCIDR"
+                        "PublicSubnet3CIDR"
                     ]
                 },
                 {
@@ -140,7 +140,7 @@
             "Type": "String"
         },
         "AvailabilityZones": {
-            "Description": "List of Availability Zones to use for the subnets in the VPC. Three Availability Zones are used in this deployment, and the logical order of your selections is preserved.",
+            "Description": "List of Availability Zones to use for the subnets in the VPC. Three Availability Zones are required for this deployment, and the logical order of your selections is preserved.",
             "Type": "List<AWS::EC2::AvailabilityZone::Name>"
         },
         "DSClientInstanceType": {
@@ -156,7 +156,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "t3.xlarge",
-            "Description": "Type of EC2 instance for the DataStage Windows client instance.",
+            "Description": "The type of EC2 instance for the DataStage Client Windows instance.",
             "Type": "String"
         },
         "IBMCustomerNumber": {
@@ -167,7 +167,7 @@
         },
         "IBMDataStageClientPartNumber": {
             "AllowedPattern": "[a-zA-Z0-9]+",
-            "Description": "The IBM part number associated with your DataStage Windows client license.",
+            "Description": "The IBM part number associated with your DataStage Windows Client license.",
             "Type": "String"
         },
         "IBMDataStagePartNumber": {
@@ -176,7 +176,7 @@
             "Type": "String"
         },
         "IISPassword": {
-            "Description": "Password to be set on the DataStage application for the username \"isadmin\".",
+            "Description": "The password to be set on the DataStage application for the user name \"isadmin\".",
             "Type": "String",
             "MinLength": "8",
             "MaxLength": "20",
@@ -224,7 +224,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "Type of EC2 instance for IS Repo worker node instances.",
+            "Description": "The type of EC2 instance for the IS Repo worker node instances.",
             "Type": "String"
         },
         "ISEngineInstanceType": {
@@ -267,7 +267,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "Type of EC2 instance for IS Engine worker node instances.",
+            "Description": "The type of EC2 instance for the IS Engine worker node instances.",
             "Type": "String"
         },
         "K8sMasterInstanceType": {
@@ -298,7 +298,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "t3.large",
-            "Description": "Type of EC2 instance for the Kubernetes master node instances.",
+            "Description": "The type of EC2 instance for the Kubernetes master node instances.",
             "Type": "String"
         },
         "KeyPairName": {
@@ -306,7 +306,7 @@
             "Type": "AWS::EC2::KeyPair::KeyName"
         },
         "LicenseAgreement": {
-            "Description": "I have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
+            "Description": "Choose Accept to acknowledge that you have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
             "Type": "String",
             "Default": "-",
             "AllowedValues": [
@@ -643,6 +643,9 @@
                     },
                     "ResourceTag": {
                         "Ref": "ResourceTag"
+                    },
+                    "VPCCIDR": {
+                        "Ref": "VPCCIDR"
                     },
                     "VPCID": {
                         "Fn::GetAtt": [
