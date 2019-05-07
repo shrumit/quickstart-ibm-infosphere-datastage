@@ -83,7 +83,8 @@
                 "GroupName": { "Fn::Sub": "${ResourceTag}-DSClientSG" },
                 "VpcId": { "Ref": "VPCID" },
                 "SecurityGroupIngress": [
-                    { "IpProtocol": "tcp", "FromPort": 3389, "ToPort": 3389, "CidrIp": { "Ref": "AllowedPublicCIDR" } }
+                    { "IpProtocol": "tcp", "FromPort": 3389, "ToPort": 3389, "CidrIp": { "Ref": "AllowedPublicCIDR" } },
+                    { "IpProtocol": "tcp", "FromPort": 19443, "ToPort": 19443, "CidrIp": { "Ref": "VPCCIDR" } }
                 ]
             }
         },
