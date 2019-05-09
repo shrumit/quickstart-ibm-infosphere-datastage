@@ -8,12 +8,16 @@
         "ParameterValue": "$[taskcat_genaz_3]"
     },
     {
-        "ParameterKey": "IBMCustomerNumber",
+        "ParameterKey": "IBMDataStageClientICN",
         "ParameterValue": "051400"
     },
     {
         "ParameterKey": "IBMDataStageClientPartNumber",
         "ParameterValue": "D1VLALL"
+    },
+    {
+        "ParameterKey": "IBMDataStageICN",
+        "ParameterValue": "051400"
     },
     {
         "ParameterKey": "IBMDataStagePartNumber",

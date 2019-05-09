@@ -28,7 +28,7 @@
             "Description": "Type of EC2 instance for the DataStage Windows Client instance",
             "Type": "String"
         },
-        "IBMCustomerNumber": {
+        "IBMDataStageClientICN": {
             "AllowedPattern": "[0-9]+",
             "Description": "ICN associated with your license",
             "NoEcho": "true",
@@ -114,7 +114,7 @@
                 "ServiceToken": {
                     "Fn::GetAtt": ["AMIInfoFunction", "Arn"]
                 },
-                "ICN": { "Ref": "IBMCustomerNumber" },
+                "ICN": { "Ref": "IBMDataStageClientICN" },
                 "PartNumber": { "Ref": "IBMDataStageClientPartNumber" },
                 "Region": { "Ref": "AWS::Region" },
                 "AccountId": { "Ref": "AWS::AccountId" }

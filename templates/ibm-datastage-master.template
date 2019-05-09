@@ -38,9 +38,10 @@
                     },
                     "Parameters": [
                         "LicenseAgreement",
-                        "IBMCustomerNumber",
-                        "IBMDataStageClientPartNumber",
-                        "IBMDataStagePartNumber"
+                        "IBMDataStageICN",
+                        "IBMDataStagePartNumber",
+                        "IBMDataStageClientICN",
+                        "IBMDataStageClientPartNumber"
                     ]
                 },
                 {
@@ -70,16 +71,19 @@
                     "default": "Availability Zones"
                 },
                 "DSClientInstanceType": {
-                    "default": "InfoSphere DataStage client instance type"
+                    "default": "InfoSphere DataStage Windows Client instance type"
                 },
-                "IBMCustomerNumber": {
-                    "default": "IBM Customer Number (ICN)"
+                "IBMDataStageClientICN": {
+                    "default": "IBM Customer Number for InfoSphere DataStage and QualityStage client"
                 },
                 "IBMDataStageClientPartNumber": {
-                    "default": "IBM part number for the InfoSphere DataStage Client"
+                    "default": "InfoSphere DataStage and QualityStage client part number"
+                },
+                "IBMDataStageICN": {
+                    "default": "IBM Customer Number for InfoSphere DataStage"
                 },
                 "IBMDataStagePartNumber": {
-                    "default": "IBM part number for InfoSphere DataStage"
+                    "default": "InfoSphere DataStage part number"
                 },
                 "IISPassword": {
                     "default": "InfoSphere DataStage password"
@@ -127,7 +131,7 @@
                     "default": "Resource tag"
                 },
                 "VPCCIDR": {
-                    "default": "The CIDR block for the VPC"
+                    "default": "VPC CIDR"
                 }
             }
         }
@@ -136,7 +140,7 @@
         "AllowedPublicCIDR": {
             "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
             "ConstraintDescription": "CIDR block parameter must be in the form x.x.x.x/16-28",
-            "Description": "The CIDR IP range that is permitted to access the cluster. It is recommended that this value be set to a trusted IP range.",
+            "Description": "The CIDR IP range that is permitted to access InfoSphere DataStage. We recommend that you set this value to a trusted IP range. For example, you might want to grant only your corporate network access to the software.",
             "Type": "String"
         },
         "AvailabilityZones": {
@@ -156,23 +160,29 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "t3.xlarge",
-            "Description": "The type of EC2 instance for the DataStage Client Windows instance.",
+            "Description": "The type of EC2 instance for the DataStage Windows Client instance.",
             "Type": "String"
         },
-        "IBMCustomerNumber": {
+        "IBMDataStageClientICN": {
             "AllowedPattern": "[0-9]+",
-            "Description": "The IBM Customer Number (ICN) listed in your Proof of Entitlement for the software.",
+            "Description": "The IBM Customer Number (ICN) listed in your Proof of Entitlement for InfoSphere DataStage and QualityStage client.",
             "NoEcho": "true",
             "Type": "String"
         },
         "IBMDataStageClientPartNumber": {
             "AllowedPattern": "[a-zA-Z0-9]+",
-            "Description": "The IBM part number associated with your DataStage Windows Client license.",
+            "Description": "The IBM part number associated with your InfoSphere DataStage and QualityStage client license.",
+            "Type": "String"
+        },
+        "IBMDataStageICN": {
+            "AllowedPattern": "[0-9]+",
+            "Description": "The IBM Customer Number (ICN) listed in your Proof of Entitlement for InfoSphere DataStage.",
+            "NoEcho": "true",
             "Type": "String"
         },
         "IBMDataStagePartNumber": {
             "AllowedPattern": "[a-zA-Z0-9]+",
-            "Description": "The IBM part number associated with your DataStage license.",
+            "Description": "The IBM part number associated with your InfoSphere DataStage license.",
             "Type": "String"
         },
         "IISPassword": {
@@ -224,7 +234,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "The type of EC2 instance for the IS Repo worker node instances.",
+            "Description": "The type of EC2 instance for the Repository-type worker node instances.",
             "Type": "String"
         },
         "ISEngineInstanceType": {
@@ -267,7 +277,7 @@
             ],
             "ConstraintDescription": "Must contain valid instance type",
             "Default": "m5.xlarge",
-            "Description": "The type of EC2 instance for the IS Engine worker node instances.",
+            "Description": "The type of EC2 instance for the Engine-type worker node instances.",
             "Type": "String"
         },
         "K8sMasterInstanceType": {
@@ -302,11 +312,11 @@
             "Type": "String"
         },
         "KeyPairName": {
-            "Description": "The name of an existing public/private key pair, which allows you to securely connect to your instance after it launches.",
+            "Description": "A public/private key pair, which allows you to connect securely to your instance after it launches.",
             "Type": "AWS::EC2::KeyPair::KeyName"
         },
         "LicenseAgreement": {
-            "Description": "Choose Accept to acknowledge that you have read and agree to the license terms for IBM DataStage (https://www-03.ibm.com/software/sla/sladb.nsf/displaylis/846A896D3565B3D8852582AC00693B87?OpenDocument).",
+            "Description": "Choose Accept to acknowledge that you have read and agree to the license terms for IBM DataStage (https://www14.software.ibm.com/cgi-bin/weblap/lap.pl?popup=Y&li_formnum=L-RDOS-B5K4RY).",
             "Type": "String",
             "Default": "-",
             "AllowedValues": [
@@ -360,14 +370,14 @@
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
             "ConstraintDescription": "Quick Start bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).",
             "Default": "aws-quickstart",
-            "Description": "S3 bucket name for the Quick Start assets. This bucket name can include numbers, lowercase letters, uppercase letters, and hyphens (-), but should not start or end with a hyphen. You can specify your own bucket if you copy all of the assets and submodules into it, if you want to override the Quick Start behavior for your specific implementation.",
+            "Description": "The S3 bucket you created for your copy of Quick Start assets, if you decide to customize or extend the Quick Start for your own use. The bucket name can include numbers, lowercase letters, uppercase letters, and hyphens, but should not start or end with a hyphen.",
             "Type": "String"
         },
         "QSS3KeyPrefix": {
             "AllowedPattern": "^[0-9a-zA-Z-/]*$",
             "ConstraintDescription": "Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
             "Default": "quickstart-ibm-infosphere-datastage/",
-            "Description": "S3 key prefix for the Quick Start assets. Quick Start key prefix can include numbers, lowercase letters, uppercase letters, hyphens (-), and forward slash (/).",
+            "Description": "The S3 key name prefix used to simulate a folder for your copy of Quick Start assets, if you decide to customize or extend the Quick Start for your own use. This prefix can include numbers, lowercase letters, uppercase letters, hyphens, and forward slashes.",
             "Type": "String"
         },
         "ResourceTag": {
@@ -541,11 +551,14 @@
                     "DSClientInstanceType": {
                         "Ref": "DSClientInstanceType"
                     },
-                    "IBMCustomerNumber": {
-                        "Ref": "IBMCustomerNumber"
+                    "IBMDataStageClientICN": {
+                        "Ref": "IBMDataStageClientICN"
                     },
                     "IBMDataStageClientPartNumber": {
                         "Ref": "IBMDataStageClientPartNumber"
+                    },
+                    "IBMDataStageICN": {
+                        "Ref": "IBMDataStageICN"
                     },
                     "IBMDataStagePartNumber": {
                         "Ref": "IBMDataStagePartNumber"

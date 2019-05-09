@@ -18,7 +18,7 @@
 			"Description": "ID of the Elastic File System to be mounted to the cluster",
 			"Type": "String"
 		},
-		"IBMCustomerNumber": {
+		"IBMDataStageICN": {
 			"AllowedPattern": "[0-9]+",
 			"NoEcho": "true",
 			"Description": "ICN associated with your license",
@@ -710,7 +710,7 @@
 						},
 						"commands": {
 							"0": {
-								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMCustomerNumber} ${IBMDataStagePartNumber} ${AWS::Region}" },
+								"command": { "Fn::Sub": "/tmp/download_installer.sh ${IBMDataStageICN} ${IBMDataStagePartNumber} ${AWS::Region}" },
 								"env": { "HOME": "/root" }
 							}
 						}
