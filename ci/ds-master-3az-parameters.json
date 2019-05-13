@@ -9,19 +9,19 @@
     },
     {
         "ParameterKey": "IBMDataStageClientICN",
-        "ParameterValue": "051400"
+        "ParameterValue": "overridden"
     },
     {
         "ParameterKey": "IBMDataStageClientPartNumber",
-        "ParameterValue": "D1VLALL"
+        "ParameterValue": "overridden"
     },
     {
         "ParameterKey": "IBMDataStageICN",
-        "ParameterValue": "051400"
+        "ParameterValue": "overridden"
     },
     {
         "ParameterKey": "IBMDataStagePartNumber",
-        "ParameterValue": "D1VLALL"
+        "ParameterValue": "overridden"
     },
     {
         "ParameterKey": "IISPassword",
