@@ -1,0 +1,1213 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Creates IBM InfoSphere DataStage Kubernetes resources in an EKS cluster. (qs-1pjbembrj)
+Parameters:
+  DataStageClientPublicIp:
+    Description: Public IP of the DataStage Client Windows instance
+    Type: String
+  IBMDataStageICN:
+    AllowedPattern: '[0-9]+'
+    Description: The IBM Customer Number (ICN) listed in your Proof of Entitlement
+      for InfoSphere DataStage.
+    NoEcho: true
+    Type: String
+  IBMDataStagePartNumber:
+    AllowedPattern: '[a-zA-Z0-9]+'
+    Description: The IBM part number associated with your InfoSphere DataStage license.
+    Type: String
+  IISPassword:
+    Description: 'The password to be set on the DataStage application for the user name "isadmin".'
+    Type: String
+    MinLength: 8
+    MaxLength: 20
+    NoEcho: true
+    AllowedPattern: '(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[\p{Punct}])([0-9a-zA-Z\p{Punct}]+)'
+    ConstraintDescription: Must be 8-20 characters, containing one number, one special character, one lower case and one upper case character.
+  KubeConfigKmsContext:
+    Type: String
+    Default: 'EKSQuickStart'
+  KubeConfigPath:
+    Type: String
+  KubeGetLambdaArn:
+    Type: String
+  KubeManifestLambdaArn:
+    Type: String
+  LicenseAgreement:
+    Description: Choose Accept to acknowledge that you have read and agree to the license terms for IBM InfoSphere DataStage v11.7.1 (http://ibm.biz/isds1171) and IBM Infosphere DataStage and Quality Stage Designer v11.7.1 (http://ibm.biz/isdsc1171).
+    Type: String
+    Default: '-'
+    AllowedValues:
+      - I agree
+      - '-'
+  NodeInstanceRoleName:
+    Type: String
+  RemoteAccessCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/x
+    Description: The CIDR IP range that is permitted to access the instances. We recommend that you set this value to a trusted IP range.
+    Type: String
+  ResourceTag:
+    AllowedPattern: '[a-z0-9]+'
+    ConstraintDescription: Non-empty. Must be lower case letters and numbers only.
+    Default: ds1
+    Description: This will be used to label AWS resources and the DataStage Kubernetes namespace. Ensure that every InfoSphere DataStage deployment on your AWS account uses a unique resource tag.
+    Type: String
+  VPCID:
+    Description: The ID of your existing VPC for deployment.
+    Type: AWS::EC2::VPC::Id
+
+Rules:
+  LicenseAgreementRule:
+    Assertions:
+      - Assert: !Contains
+          - - I agree
+          - !Ref 'LicenseAgreement'
+        AssertDescription: User must agree to the terms of the license agreement
+
+Resources:
+  # This function obtains permission for the IBM private registry and returns the registry prefix
+  EcrAccess:
+    Type: Custom::EcrAccess
+    Properties:
+      ServiceToken: !GetAtt 'EcrAccessFunction.Arn'
+      ICN: !Ref 'IBMDataStageICN'
+      PartNumber: !Ref 'IBMDataStagePartNumber'
+      Region: !Ref 'AWS::Region'
+      AccountId: !Ref 'AWS::AccountId'
+  EcrAccessFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import botocore.vendored.requests as requests
+          import cfnresponse
+          import json
+          ENDPOINT='https://fnnuabv2h0.execute-api.ca-central-1.amazonaws.com/default/ecr_permissioning'
+          def handler(event, context):
+              responseData = {}
+              try:
+                  print(event['RequestType'], 'request received.')
+                  if (event['RequestType'] == 'Delete' or event['RequestType'] == 'Update'):
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                      return
+                  data = {
+                      'icn': event['ResourceProperties']['ICN'],
+                      'part_number': event['ResourceProperties']['PartNumber'],
+                      'region': event['ResourceProperties']['Region'],
+                      'account_id': event['ResourceProperties']['AccountId']
+                  }
+                  r = requests.post(ENDPOINT, json=data)
+                  if r.status_code != 200:
+                      print('**FAILURE_REASON: Validation API returned non-200 response code. Please ensure that ICN and Part Number are correct')
+                      cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+                      return
+                  response = r.json()
+                  responseData['Prefix']=response['prefix']
+              except Exception as err:
+                  print('**FAILURE_REASON:', type(err).__name__, str(err))
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+              else:
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+      Handler: index.handler
+      Role: !GetAtt 'LambdaExecutionRole.Arn'
+      Runtime: python3.7
+      Timeout: 60
+
+  # This function waits until the Kubernetes installation has finished
+  InstallationCheck:
+    Type: Custom::InstallationCheck
+    Properties:
+      ServiceToken: !GetAtt 'InstallationCheckFunction.Arn'
+      Url: !Sub 'https://${DataStageIngressHostName}:9446/ibm/iis/launchpad/'
+      RemoteCidr: !Ref RemoteAccessCIDR
+  InstallationCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import cfnresponse
+          from socket import timeout
+          import ssl
+          import time
+          import urllib
+          INITIAL_WAIT=420
+          BACKOFF_WAIT=10
+          POST_WAIT=300
+          def handler(event, context):
+              responseData = {}
+              try:
+                  print(event['RequestType'], 'request received.')
+                  if (event['RequestType'] == 'Delete' or event['RequestType'] == 'Update'):
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+                      return
+                  time.sleep(INITIAL_WAIT)
+                  while True and event['ResourceProperties']['RemoteCidr'] == '0.0.0.0/0':
+                      try:
+                          print('Trying...')
+                          response = urllib.request.urlopen(event['ResourceProperties']['Url'], context=ssl._create_unverified_context())
+                          if (response.getcode() == 200):
+                              print('Url works')
+                              break
+                          print('Non-200 response code:', response.getcode())
+                          print('Backoff...')
+                          time.sleep(BACKOFF_WAIT)
+                      except (urllib.error.HTTPError, urllib.error.URLError, timeout) as err:
+                          print('Non-fatal error:', type(err).__name__, str(err))
+                          print('Backoff...')
+                          time.sleep(BACKOFF_WAIT)
+                  time.sleep(POST_WAIT)
+              except Exception as err:
+                  print('**FAILURE_REASON:', type(err).__name__, str(err))
+                  cfnresponse.send(event, context, cfnresponse.FAILED, responseData)
+              else:
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+      Handler: index.handler
+      Role: !GetAtt 'LambdaExecutionRole.Arn'
+      Runtime: python3.7
+      Timeout: 900
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  # This set of resources configures a Route53 private hosted zone with alias records to the two DataStage service ELBs
+  PrivateHostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Hosted zone to map internal hostnames to ELBs
+      Name: en-cond
+      VPCs:
+        - VPCId: !Ref VPCID
+          VPCRegion: !Ref 'AWS::Region'
+  Route53Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: 'ExternalDNS'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - route53:ChangeResourceRecordSets
+            Resource:
+              - !Sub 'arn:aws:route53:::hostedzone/${PrivateHostedZone}'
+          - Effect: Allow
+            Action:
+              - route53:ListHostedZones
+              - route53:ListResourceRecordSets
+            Resource:
+              - '*'
+      Roles:
+        - !Ref NodeInstanceRoleName
+  DataStageExternalDNSSA:
+    DependsOn: PrivateHostedZone
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: ServiceAccount
+        metadata:
+          name: external-dns
+  DataStageExternalDNSCR:
+    DependsOn: PrivateHostedZone
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: rbac.authorization.k8s.io/v1beta1
+        kind: ClusterRole
+        metadata:
+          name: external-dns
+        rules:
+        - apiGroups: [""]
+          resources: ["services"]
+          verbs: ["get","watch","list"]
+        - apiGroups: [""]
+          resources: ["pods"]
+          verbs: ["get","watch","list"]
+        - apiGroups: ["extensions"]
+          resources: ["ingresses"]
+          verbs: ["get","watch","list"]
+        - apiGroups: [""]
+          resources: ["nodes"]
+          verbs: ["list","watch"]
+  DataStageExternalDNSCRB:
+    DependsOn: PrivateHostedZone
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: rbac.authorization.k8s.io/v1beta1
+        kind: ClusterRoleBinding
+        metadata:
+          name: external-dns-viewer
+        roleRef:
+          apiGroup: rbac.authorization.k8s.io
+          kind: ClusterRole
+          name: external-dns
+        subjects:
+        - kind: ServiceAccount
+          name: external-dns
+          namespace: default
+  DataStageExternalDNSDEP:
+    DependsOn: [DataStageExternalDNSSA, DataStageExternalDNSCR, DataStageExternalDNSCRB, Route53Policy]
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: extensions/v1beta1
+        kind: Deployment
+        metadata:
+          name: external-dns
+        spec:
+          strategy:
+            type: Recreate
+          template:
+            metadata:
+              labels:
+                app: external-dns
+            spec:
+              serviceAccountName: external-dns
+              containers:
+              - name: external-dns
+                image: registry.opensource.zalan.do/teapot/external-dns:latest
+                args:
+                - --source=service
+                - --domain-filter=en-cond
+                - --provider=aws
+                - --aws-zone-type=private
+                - --registry=txt
+                - !Sub '--txt-owner-id=${PrivateHostedZone}'
+                - !Sub '--zone-id-filter=hostedzone/${PrivateHostedZone}'
+
+## ---
+## Kubernetes manifests for IBM InfoSphere DataStage
+
+  DataStageNameSpace:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Namespace
+        metadata:
+          name: !Sub '${ResourceTag}'
+  DataStageMasterLocalTime:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        data:
+          MASTER_host: temp.fyre.ibm.com
+          MASTER_localtime: ../usr/share/zoneinfo/America/Los_Angeles
+        kind: ConfigMap
+        metadata:
+          name: is-en-conductor-0
+          namespace: !GetAtt DataStageNameSpace.name
+
+  DataStageRepoPVC:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: 'vol-repos-dedicated-claim'
+          namespace: !GetAtt DataStageNameSpace.name
+        spec:
+          storageClassName: efs
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 5Gi
+  DataStageEnginePVC:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: 'vol-engine-dedicated-claim'
+          namespace: !GetAtt DataStageNameSpace.name
+        spec:
+          storageClassName: efs
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 5Gi
+  DataStageServicesPVC:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: PersistentVolumeClaim
+        metadata:
+          name: 'vol-services-dedicated-claim'
+          namespace: !GetAtt DataStageNameSpace.name
+        spec:
+          storageClassName: efs
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 5Gi
+
+  DataStageSecretConfig:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Secret
+        metadata:
+          name: hostedpassword
+          namespace: !GetAtt DataStageNameSpace.name
+        type: Opaque
+        data:
+          hosted-password:
+            Fn::Base64:
+              !Sub '${IISPassword}'
+  DataStageSecretPasswordConfig:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: ispassword-config
+          namespace: !GetAtt DataStageNameSpace.name
+        data:
+          updatePassword_services.sh: |
+            #!/bin/sh
+            if [[ $APP_PASSWORD != "" ]]; then
+             if [[ ! -f ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/servicespasswordchanged ]]; then
+               echo "Shutdown Services to change passwords for isadmin and certificate"
+               /opt/IBM/InformationServer/ASBServer/bin/MetadataServer.sh stop;
+               echo "Changing isadmin password"
+               (cd /opt/IBM/InformationServer/ASBServer/bin; ./DirectoryAdmin.sh -user -userid isadmin -password $APP_PASSWORD)
+               echo "Changing certificate passwords..."
+               (cd /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security; rm -rf iis-server-keystore.p12; /opt/IBM/InformationServer/jdk/bin/keytool -genkeypair -dname 'CN=is-servicesdocker,OU=Software Group,O=IBM,C=US'  -keystore ./iis-server-keystore.p12 -keypass ${APP_PASSWORD//[$'\t\r\n ']} -storepass ${APP_PASSWORD//[$'\t\r\n ']} -validity 2920  -alias iisSSL -keyalg RSA -keysize 2048 -sigalg SHA512withRSA -storetype PKCS12)
+               /opt/IBM/InformationServer/jdk/bin/keytool -importkeystore -srckeystore /opt/IBM/InformationServer/initScripts/iiscert.p12 -srcstoretype PKCS12 -destkeystore /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12 -deststoretype PKCS12 -srcalias iiscert -srcstorepass iiskeypass -deststorepass ${APP_PASSWORD//[$'\t\r\n ']} -destkeypass ${APP_PASSWORD//[$'\t\r\n ']}
+               /opt/IBM/InformationServer/wlp/bin/securityUtility encode --encoding=aes ${APP_PASSWORD//[$'\t\r\n ']} > /tmp/sec_passwd
+               SEC_PASSWD="$(awk '{print $1 }' </tmp/sec_passwd)"
+               sed -ie --follow-symlinks "s|iis\.keystore\.password.*|iis\.keystore\.password=${SEC_PASSWD}|g" /opt/IBM/InformationServer/wlp/usr/servers/iis/bootstrap.properties;
+               /opt/IBM/InformationServer/jdk/bin/keytool -storepasswd -storepass isadmin -new ${APP_PASSWORD//[$'\t\r\n ']} -keystore /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-truststore.jks
+               cp -p /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12 ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/certificate/
+               rm -rf /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12
+               ln -s ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/certificate/iis-server-keystore.p12 /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12
+               /opt/IBM/InformationServer/ASBServer/bin/MetadataServer.sh run;
+             fi
+            fi
+          updatePassword_engine.sh: |
+            #!/bin/sh
+            #Script to change the passwords
+            if [[ $APP_PASSWORD != "" ]]; then
+            pwd_change=2;
+             while [ $pwd_change != 0 ];
+             do sleep 2;
+             pwd_change=`/opt/IBM/InformationServer/ASBNode/bin/UpdateSignerCerts.sh -url https://is-servicesdocker:9446 -user isadmin -password ${APP_PASSWORD//[$'\t\r\n ']} -silent; echo $?`
+             done;
+            (cd /opt/IBM/InformationServer/ASBNode/bin; ./NodeAgents.sh restart;)
+            fi
+          db2password_change.sh: |
+            #!/bin/sh
+            if [[ ! -f ${DEDICATED_REPOS_VOLPATH}/${HOSTNAME}/password_changed ]];
+            then
+            su - db2inst1 -c ". /home/db2inst1/sqllib/db2profile; db2 connect to XMETA; db2 \"CALL SYSPROC.ADMIN_ROTATE_MASTER_KEY (NULL)\"; db2 terminate; db2 connect to dsodb; db2 \"CALL SYSPROC.ADMIN_ROTATE_MASTER_KEY (NULL)\"; db2 terminate;";
+            su - db2inst1 -c "cd /home/db2inst1/Repos/hosted; ~/sqllib/db2profile; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/sqllib/lib64/gskit; ~/sqllib/gskit/bin/gsk8capicmd_64 -keydb -changepw -db /home/db2inst1/Repos/hosted/db2keystore.p12 -pw isadmin -new_pw ${APP_PASSWORD//[$'\t\r\n ']}  -stash";
+            touch  ${DEDICATED_REPOS_VOLPATH}/${HOSTNAME}/password_changed;
+            fi
+  DataStageCustomerConfig:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: customer-config
+          namespace: !GetAtt DataStageNameSpace.name
+        data:
+          customerconfig_services.sh: |
+            #!/bin/sh
+            echo "Executes the configurations needed by customer as part of container startup"
+          customerconfig_engine.sh: |
+            #!/bin/sh
+            echo "Executes the configurations needed by customer as part of container startup"
+          customerconfig_repo.sh: |
+            #!/bin/sh
+            echo "Executes the configurations needed by customer as part of container startup"
+          customerconfig_compute.sh: |
+            #!/bin/sh
+            echo "Executes the configurations needed by customer as part of container startup"
+
+  DataStageRoleBinding:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        # apiVersion: v1
+        kind: ClusterRoleBinding
+        apiVersion: rbac.authorization.k8s.io/v1
+        metadata:
+         name: iis-rbac
+         namespace: !GetAtt DataStageNameSpace.name
+        subjects:
+         - kind: ServiceAccount
+           name: default
+           namespace: !GetAtt DataStageNameSpace.name
+        roleRef:
+         kind: ClusterRole
+         name: cluster-admin
+         apiGroup: rbac.authorization.k8s.io
+
+  DataStageRepository:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        # apiVersion: v1
+        kind: Deployment
+        apiVersion: extensions/v1beta1
+        metadata:
+         name: is-xmetadocker-pod
+         namespace: !GetAtt DataStageNameSpace.name
+         labels:
+           run: is-xmetadocker-deployment
+        spec:
+          replicas: 1
+          selector:
+           matchLabels:
+            run: is-xmetadocker-deployment-pod
+          template:
+            metadata:
+              labels:
+               app: is-repository
+               component: is-xmetadocker-pod
+               run: is-xmetadocker-deployment-pod
+            spec:
+              imagePullSecrets:
+                - name: iis-cumulus-registry-secret
+              hostname: is-xmetadocker
+              hostIPC: true
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: "node-role.kubernetes.io/master"
+                        operator: NotIn
+                        values:
+                        - ""
+                podAntiAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                  - labelSelector:
+                      matchExpressions:
+                        - key: app
+                          operator: In
+                          values:
+                          - is-en-conductor
+                    topologyKey: "kubernetes.io/hostname"
+                  # preferredDuringSchedulingIgnoredDuringExecution:
+                  # - weight: 100
+                  #   podAffinityTerm:
+                  #     labelSelector:
+                  #       matchExpressions:
+                  #         - key: app
+                  #           operator: In
+                  #           values:
+                  #           - is-en-conductor
+                  #     topologyKey: "kubernetes.io/hostname"
+              containers:
+              - name: is-xmetadocker-container
+                image: !Sub '${EcrAccess.Prefix}is-db2xmeta-image:11.7.1-1.0'
+                command: [ "/bin/bash", "-c", "--" ]
+                args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   /opt/IBM/InformationServer/initScripts/db2password_change.sh;
+                   /opt/IBM/InformationServer/initScripts/customerconfig_repo.sh;
+                   echo \"Container is ready to use\"; tail -f /dev/null
+                   & wait $!"
+                      ]
+                resources:
+                  requests:
+                    memory: "6000Mi"
+                    cpu: "2000m"
+                securityContext:
+                  privileged: false
+                  capabilities:
+                    add: ["SETFCAP", "SYS_NICE", "IPC_OWNER"]
+                imagePullPolicy: IfNotPresent
+                ports:
+                - containerPort: 50000
+                  protocol: TCP
+                env:
+                  - name: MY_NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  - name: MY_POD_NAME
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.name
+                  - name: MY_POD_NAMESPACE
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.namespace
+                  - name: DEDICATED_REPOS_VOLPATH
+                    value: /mnt/IIS_$(MY_POD_NAMESPACE)/Repository/$(MY_POD_NAMESPACE)
+                  - name: APP_PASSWORD
+                    valueFrom:
+                       secretKeyRef:
+                          name: hostedpassword
+                          key:  hosted-password
+                livenessProbe:
+                  tcpSocket:
+                    port: 50000
+                  initialDelaySeconds: 800
+                  periodSeconds: 60
+                  failureThreshold: 3
+                volumeMounts:
+                 - mountPath: "/mnt"
+                   name: xmeta-pv-volume
+                 - mountPath: /opt/IBM/InformationServer/initScripts/db2password_change.sh
+                   name: passwordupdate
+                   subPath: db2password_change.sh
+                 - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_repo.sh
+                   name: customerconfig
+                   subPath: customerconfig_repo.sh
+              volumes:
+                - name: xmeta-pv-volume
+                  persistentVolumeClaim:
+                    claimName: !GetAtt DataStageRepoPVC.name
+                - name: passwordupdate
+                  configMap:
+                    name: ispassword-config
+                    defaultMode: 0755
+                - name: customerconfig
+                  configMap:
+                    name: customer-config
+                    defaultMode: 0755
+
+  DataStageRepositoryService:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: is-xmetadocker
+          namespace: !GetAtt DataStageNameSpace.name
+          labels:
+            run: is-xmetadocker-svc
+            component: is-xmetadocker-pod
+        spec:
+          type: NodePort
+          ports:
+          - name: is-xmetadocker-port
+            protocol: TCP
+            nodePort: 31000
+            port: 50000
+            targetPort: 50000
+          selector:
+           run: is-xmetadocker-deployment-pod
+           component: is-xmetadocker-pod
+
+  DataStageServices:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        # apiVersion: v1
+        kind: Deployment
+        apiVersion: extensions/v1beta1
+        metadata:
+         name: is-servicesdocker-pod
+         namespace: !GetAtt DataStageNameSpace.name
+         labels:
+           run: is-servicesdocker-deployment
+        spec:
+          replicas: 1
+          selector:
+           matchLabels:
+            run: is-servicesdocker-deployment-pod
+          template:
+            metadata:
+              labels:
+               app: is-services
+               component: is-servicesdocker-pod
+               run: is-servicesdocker-deployment-pod
+            spec:
+              imagePullSecrets:
+                - name: iis-cumulus-registry-secret
+              hostname: is-servicesdocker
+              affinity:
+                podAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                  - labelSelector:
+                      matchExpressions:
+                      - key: app
+                        operator: In
+                        values:
+                        - is-repository
+                    topologyKey: kubernetes.io/hostname
+              containers:
+              - name: is-servicesdocker-container
+                image: !Sub '${EcrAccess.Prefix}is-services-image:11.7.1-1.0'
+                command: [ "/bin/bash", "-c", "--" ]
+                args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   xmeta_status=1;
+                   while [ $xmeta_status != 0  ];
+                   do sleep 2;
+                   xmeta_status=`nc is-xmetadocker 50000 < /dev/null; echo $?`;
+                   done;
+                   /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   /opt/IBM/InformationServer/initScripts/updatePassword_services.sh;
+                   touch ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/servicespasswordchanged;
+                   /opt/IBM/InformationServer/initScripts/customerconfig_services.sh;
+                   echo $?;
+                   echo \"Container is ready to use\";
+                   tail -f /dev/null
+                   & wait $!"
+                      ]
+                resources:
+                  requests:
+                    memory: "2000Mi"
+                    cpu: "500m"
+                imagePullPolicy: IfNotPresent
+                ports:
+                - containerPort: 9446
+                  protocol: TCP
+                env:
+                  - name: MASTER_localtime
+                    valueFrom:
+                      configMapKeyRef:
+                        name: is-en-conductor-0
+                        key: MASTER_localtime
+                  - name: MASTER_host
+                    valueFrom:
+                      configMapKeyRef:
+                        name: is-en-conductor-0
+                        key: MASTER_host
+                  - name: MY_NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  - name: MY_POD_NAME
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.name
+                  - name: MY_POD_NAMESPACE
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.namespace
+                  - name: DEDICATED_SERVICES_VOLPATH
+                    value: /mnt/IIS_$(MY_POD_NAMESPACE)/Services/$(MY_POD_NAMESPACE)
+                  - name: APP_PASSWORD
+                    valueFrom:
+                       secretKeyRef:
+                          name: hostedpassword
+                          key:  hosted-password
+                livenessProbe:
+                  tcpSocket:
+                    port: 9446
+                  initialDelaySeconds: 2400
+                  periodSeconds: 120
+                  failureThreshold: 3
+                volumeMounts:
+                 - mountPath: "/mnt"
+                   name: services-dedicated-volume
+                 - mountPath: /opt/IBM/InformationServer/initScripts/updatePassword_services.sh
+                   name: passwordupdate
+                   subPath: updatePassword_services.sh
+                 - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_services.sh
+                   name: customerconfig
+                   subPath: customerconfig_services.sh
+              volumes:
+                - name: services-dedicated-volume
+                  persistentVolumeClaim:
+                    claimName: !GetAtt DataStageServicesPVC.name
+                - name: passwordupdate
+                  configMap:
+                    name: ispassword-config
+                    defaultMode: 0755
+                - name: customerconfig
+                  configMap:
+                    name: customer-config
+                    defaultMode: 0755
+
+  DataStageServicesService:
+    DependsOn: DataStageExternalDNSDEP
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: is-servicesdocker
+          namespace: !GetAtt DataStageNameSpace.name
+          labels:
+            run: is-servicesdocker-svc
+            component: is-servicesdocker-pod
+          annotations:
+            external-dns.alpha.kubernetes.io/hostname: is-servicesdocker.en-cond
+            # service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+        spec:
+          externalTrafficPolicy: Cluster
+          ports:
+          - name: is-servicesdocker-port
+            protocol: TCP
+            nodePort: 32500
+            port: 9446
+            targetPort: 9446
+          selector:
+           run: is-servicesdocker-deployment-pod
+           component: is-servicesdocker-pod
+          type: LoadBalancer
+          loadBalancerSourceRanges:
+          - !Ref RemoteAccessCIDR
+          - !Sub ${DataStageClientPublicIp}/32
+
+  DataStageIngressHostName:
+    Type: "Custom::KubeGet"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeGetLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Namespace: !GetAtt DataStageNameSpace.name
+      Name: !Sub 'svc/${DataStageServicesService.name}'
+      JsonPath: '{.status.loadBalancer.ingress[0].hostname}'
+
+  DataStageEngineCond:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: apps/v1beta1
+        kind: StatefulSet
+        metadata:
+          name: is-en-conductor
+          namespace: !GetAtt DataStageNameSpace.name
+        spec:
+          serviceName: "en-cond"
+          replicas: 1
+          template:
+            metadata:
+              labels:
+                app: is-en-conductor
+            spec:
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: "node-role.kubernetes.io/master"
+                        operator: NotIn
+                        values:
+                        - ""
+                podAntiAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchExpressions:
+                          - key: app
+                            operator: In
+                            values:
+                            - is-services
+                            - is-repository
+                      topologyKey: "kubernetes.io/hostname"
+              containers:
+              - name: is-en-conductor
+                image: !Sub '${EcrAccess.Prefix}is-engine-image:11.7.1-1.0'
+                command: [ "/bin/bash", "-c", "--" ]
+                args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   yum install -y nc;
+                   services_status=1;
+                   while [ $services_status != 0  ];
+                   do sleep 2;
+                   services_status=`nc is-servicesdocker 9446 < /dev/null; echo $?`;
+                   done;
+                   /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   /opt/IBM/InformationServer/initScripts/updatePassword_engine.sh;
+                   /opt/IBM/InformationServer/initScripts/customerconfig_engine.sh;
+                   echo \"Container is ready to use\";
+
+                   tail -f /dev/null
+                   & wait $!"
+                      ]
+                resources:
+                  requests:
+                    cpu: "1000m"
+                    memory: "4000Mi"
+                imagePullPolicy: IfNotPresent
+                env:
+                  - name: MASTER_localtime
+                    valueFrom:
+                      configMapKeyRef:
+                        name: is-en-conductor-0
+                        key: MASTER_localtime
+                  - name: MY_NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  - name: MY_POD_NAME
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.name
+                  - name: NAME_SPACE
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.namespace
+                  - name: DEDICATED_ENGINE_VOLPATH
+                    value: /mnt/IIS_$(NAME_SPACE)/Engine/$(NAME_SPACE)
+                  - name: APP_PASSWORD
+                    valueFrom:
+                       secretKeyRef:
+                          name: hostedpassword
+                          key:  hosted-password
+                livenessProbe:
+                  exec:
+                    command:
+                      - /bin/bash
+                      - -c
+                      - netstat -nl|grep -E "31531|8449|31538" > /tmp/engine_ports_out.txt; [[ $(cat /tmp/engine_ports_out.txt|wc -l) -ge 3 ]] && exit 0 || exit 1
+                  initialDelaySeconds: 900
+                  periodSeconds: 120
+                  failureThreshold: 3
+                volumeMounts:
+                 - mountPath: /home/dsadm
+                   name: vol
+                   subPath: !Sub 'IIS_${ResourceTag}/Engine/${ResourceTag}/is-en-conductor-0/EngineClients/db2_client/dsadm'
+                 - mountPath: /home/db2inst1
+                   name: vol
+                   subPath: !Sub 'IIS_${ResourceTag}/Engine/${ResourceTag}/is-en-conductor-0/EngineClients/db2_client/db2inst1'
+                 - mountPath: /home_
+                   name: vol
+                   subPath: !Sub 'IIS_${ResourceTag}/Engine/${ResourceTag}/is-en-conductor-0/EngineClients/db2_client/home_'
+                 - mountPath: "/mnt"
+                   name: vol
+                 - mountPath: /opt/IBM/InformationServer/initScripts/updatePassword_engine.sh
+                   name: passwordupdate
+                   subPath: updatePassword_engine.sh
+                 - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_engine.sh
+                   name: customerconfig
+                   subPath: customerconfig_engine.sh
+              volumes:
+              - name: vol
+                persistentVolumeClaim:
+                  claimName: !GetAtt DataStageEnginePVC.name
+              - name: passwordupdate
+                configMap:
+                  name: ispassword-config
+                  defaultMode: 0755
+              - name: customerconfig
+                configMap:
+                  name: customer-config
+                  defaultMode: 0755
+
+  DataStageEngineCondService:
+    DependsOn: DataStageExternalDNSDEP
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: en-cond
+          namespace: !GetAtt DataStageNameSpace.name
+          labels:
+            app: en-cond
+        spec:
+          ports:
+          - port: 80
+            name: en-cond
+          clusterIP: None
+          selector:
+            app: is-en-conductor
+
+  DataStageEngineCondServiceNodePort:
+    DependsOn: DataStageEngineCondService
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          namespace: !GetAtt DataStageNameSpace.name
+          labels:
+            app: is-en-conductor
+          name: is-en-conductor-0
+          annotations:
+            external-dns.alpha.kubernetes.io/hostname: is-en-conductor-0.en-cond
+            # service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+        spec:
+          externalTrafficPolicy: Cluster
+          ports:
+          - name: cond-rpc-port
+            port: 31538
+            protocol: TCP
+            targetPort: 31538
+            nodePort: 32501
+          - name: asb-agent-port
+            port: 31531
+            protocol: TCP
+            targetPort: 31531
+            nodePort: 32502
+          selector:
+            app: is-en-conductor
+          type: LoadBalancer
+          loadBalancerSourceRanges:
+          - !Ref RemoteAccessCIDR
+          - !Sub ${DataStageClientPublicIp}/32
+
+  DataStageEngineComputeService:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: conductor-0
+          namespace: !GetAtt DataStageNameSpace.name
+          labels:
+            app: conductor-0
+        spec:
+          ports:
+          - port: 80
+            name: conductor-0
+          clusterIP: None
+          selector:
+            app: is-engine-compute
+
+  DataStageEngineCompute:
+    Type: "Custom::KubeManifest"
+    Version: '1.0'
+    Properties:
+      ServiceToken: !Ref KubeManifestLambdaArn
+      KubeConfigPath: !Ref KubeConfigPath
+      KubeConfigKmsContext: !Ref KubeConfigKmsContext
+      Manifest:
+        apiVersion: apps/v1beta1
+        kind: StatefulSet
+        metadata:
+          name: is-engine-compute
+          namespace: !GetAtt DataStageNameSpace.name
+        spec:
+          serviceName: "conductor-0"
+          replicas: 2
+          template:
+            metadata:
+              labels:
+                app: is-engine-compute
+            spec:
+              affinity:
+                nodeAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    nodeSelectorTerms:
+                    - matchExpressions:
+                      - key: "node-role.kubernetes.io/master"
+                        operator: NotIn
+                        values:
+                        - ""
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 1
+                    preference:
+                      matchExpressions:
+                      - key: app
+                        operator: NotIn
+                        values:
+                        - is-en-conductor
+                        - is-repository
+                podAntiAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                  - labelSelector:
+                      matchExpressions:
+                        - key: app
+                          operator: In
+                          values:
+                          - is-engine-compute
+                    topologyKey: kubernetes.io/hostname
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - weight: 100
+                    podAffinityTerm:
+                      labelSelector:
+                        matchExpressions:
+                        - key: app
+                          operator: In
+                          values:
+                          - is-en-conductor
+                          - is-services
+                          - is-repository
+                      topologyKey: kubernetes.io/hostname
+              containers:
+              - name: is-engine-compute
+                image: !Sub '${EcrAccess.Prefix}is-en-compute-image:11.7.1-1.0'
+                command: [ "/bin/bash", "-c", "--" ]
+                args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+                   /opt/IBM/InformationServer/initScripts/customerconfig_compute.sh;
+                   echo \"Container is ready to use\";
+                   tail -f /dev/null
+                   & wait $!"
+                      ]
+                resources:
+                  requests:
+                    memory: "1000Mi"
+                    cpu: "500m"
+                imagePullPolicy: IfNotPresent
+                env:
+                  - name: MASTER_localtime
+                    valueFrom:
+                      configMapKeyRef:
+                        name: is-en-conductor-0
+                        key: MASTER_localtime
+                  - name: MY_NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                  - name: MY_POD_NAME
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.name
+                  - name: NAME_SPACE
+                    valueFrom:
+                       fieldRef:
+                         fieldPath: metadata.namespace
+                  - name: DEDICATED_ENGINE_VOLPATH
+                    value: /mnt/IIS_$(NAME_SPACE)/Engine/$(NAME_SPACE)
+                  - name: ENGINE_HOST
+                    value: "is-en-conductor-0"
+                  - name: APP_PASSWORD
+                    valueFrom:
+                       secretKeyRef:
+                          name: hostedpassword
+                          key:  hosted-password
+                volumeMounts:
+                 - mountPath: "/mnt"
+                   name: vol
+                 - mountPath: /home/dsadm
+                   name: vol
+                   subPath: !Sub 'IIS_${ResourceTag}/Engine/${ResourceTag}/is-en-conductor-0/EngineClients/db2_client/dsadm'
+                 - mountPath: /home/db2inst1
+                   name: vol
+                   subPath: !Sub 'IIS_${ResourceTag}/Engine/${ResourceTag}/is-en-conductor-0/EngineClients/db2_client/db2inst1'
+                 - mountPath: /home_
+                   name: vol
+                   subPath: !Sub 'IIS_${ResourceTag}/Engine/${ResourceTag}/is-en-conductor-0/EngineClients/db2_client/home_'
+                 - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_compute.sh
+                   name: customerconfig
+                   subPath: customerconfig_compute.sh
+              volumes:
+              - name: vol
+                persistentVolumeClaim:
+                  claimName: !GetAtt DataStageEnginePVC.name
+              - name: customerconfig
+                configMap:
+                  name: customer-config
+                  defaultMode: 0755
+Outputs:
+  LaunchpadURL:
+    Value: !Sub 'https://${DataStageIngressHostName}:9446/ibm/iis/launchpad/'
