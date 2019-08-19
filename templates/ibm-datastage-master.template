@@ -494,6 +494,7 @@
                     ]
                 },
                 "Parameters": {
+                    "EnableTCPForwarding": "true",
                     "KeyPairName": {
                         "Ref": "KeyPairName"
                     },
