@@ -1,0 +1,37 @@
+  apiVersion: v1   
+  kind: SecurityContextConstraints
+  metadata:
+    name: scc-datastage
+  ## permission
+  allowPrivilegedContainer: false
+  allowHostIPC: true
+  allowHostNetwork: true
+  allowHostPID: true
+  allowHostPorts: true
+  #allowedFlexVolumes: null
+  ## linux capabilities
+  allowedCapabilities:
+  - SYS_NICE
+  - IPC_OWNER
+  - SYS_RESOURCE
+  - SETFCAP
+  requiredDropCapabilities: []
+  defaultAddCapabilities: []
+  priority: 10
+  readOnlyRootFilesystem: false
+  allowHostDirVolumePlugin: false
+  ## strategy
+  runAsUser:
+    type: RunAsAny
+  seLinuxContext:
+    type: RunAsAny
+  fsGroup:
+    type: RunAsAny
+  supplementalGroups:
+    type: RunAsAny
+  ## who can access this SCC
+  users: []
+  groups:
+  - system:authenticated
+  volumes:
+  - '*'
