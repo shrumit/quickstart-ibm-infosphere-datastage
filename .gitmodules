@@ -4,5 +4,5 @@
 	branch = master
 [submodule "submodules/quickstart-redhat-openshift"]
 	path = submodules/quickstart-redhat-openshift
-	url = git@github.com:shrumit/quickstart-redhat-openshift.git
-	branch = develop
+    url = git@github.com:aws-quickstart/quickstart-redhat-openshift.git
+    branch = master
