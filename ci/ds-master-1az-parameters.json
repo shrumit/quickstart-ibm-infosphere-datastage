@@ -1,11 +1,31 @@
 [
     {
+      "ParameterKey": "ClusterAvailability",
+      "ParameterValue": "Non-HA"
+    },
+    {
+      "ParameterKey": "AvailabilityZones",
+      "ParameterValue": "$[taskcat_genaz_3]"
+    },
+    {
         "ParameterKey": "RemoteAccessCIDR",
         "ParameterValue": "10.0.0.0/16"
     },
     {
-        "ParameterKey": "AvailabilityZones",
-        "ParameterValue": "$[taskcat_genaz_3]"
+        "ParameterKey": "ContainerAccessCIDR",
+        "ParameterValue": "10.0.0.0/16"
+    },
+    {
+        "ParameterKey": "ResourceTag",
+        "ParameterValue": "ds2"
+    },
+    {
+      "ParameterKey": "IISPassword",
+      "ParameterValue": "overridden"
+    },
+    {
+      "ParameterKey": "OpenShiftAdminPassword",
+      "ParameterValue": "overridden"
     },
     {
         "ParameterKey": "IBMDataStageClientICN",
@@ -24,10 +44,6 @@
         "ParameterValue": "overridden"
     },
     {
-        "ParameterKey": "IISPassword",
-        "ParameterValue": "overridden"
-    },
-    {
         "ParameterKey": "KeyPairName",
         "ParameterValue": "$[taskcat_getkeypair]"
     },
@@ -40,10 +56,6 @@
         "ParameterValue": "$[taskcat_autobucket]"
     },
     {
-        "ParameterKey": "OpenShiftAdminPassword",
-        "ParameterValue": "overridden"
-    },
-    {
         "ParameterKey": "RedhatSubscriptionUserName",
         "ParameterValue": "overridden"
     },
@@ -54,9 +66,5 @@
     {
         "ParameterKey": "RedhatSubscriptionPoolID",
         "ParameterValue": "overridden"
-    },
-    {
-        "ParameterKey": "ContainerAccessCIDR",
-        "ParameterValue": "10.0.0.0/16"
     }
 ]

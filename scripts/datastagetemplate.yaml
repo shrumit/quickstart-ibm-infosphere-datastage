@@ -1,0 +1,895 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+message: |-
+  The following service(s) have been created in your project: ${NAMESPACE}.
+        Username: isadmin
+        Password: ${APPLICATION_PASSWORD}
+        Launchpad URL: ${launchpadurl}
+  For more information about, see <documentation link>.
+metadata:
+  name: datastage
+  annotations:
+    description: |-
+      IBM® InfoSphere® DataStage is a tool that Extract, transfer and load (ETL) data across multiple systems, supports extended metadata management and big data enterprise connectivity.
+    openshift.io/display-name: IBM® InfoSphere® DataStage
+    openshift.io/documentation-url: <doc url>
+    openshift.io/long-description: <desc>
+    openshift.io/provider-display-name: Red Hat, Inc.
+    openshift.io/support-url: https://access.redhat.com
+    tags: AI, Machine Learning, Data Management, IBM
+labels:
+  app: datastage
+objects:
+
+- apiVersion: storage.k8s.io/v1
+  kind: StorageClass
+  metadata:
+    annotations:
+      storageclass.kubernetes.io/is-default-class: "true"
+    name: glusterfs-storage
+  parameters:
+    resturl: http://heketi-storage.glusterfs.svc:8080
+    restuser: admin
+    secretName: heketi-storage-admin-secret
+    secretNamespace: glusterfs
+    volumeoptions: performance.write-behind off, performance.io-cache off
+  provisioner: kubernetes.io/glusterfs
+  reclaimPolicy: Retain
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: ${NAMESPACE}-vol-repos-dedicated-claim
+    annotations:
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    storageClassName: ${STORAGE_CLASS}
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${REPO_VOL_SIZE}
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: ${NAMESPACE}-vol-engine-dedicated-claim
+    annotations:
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    storageClassName: ${STORAGE_CLASS}
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${ENGINE_VOL_SIZE}
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: ${NAMESPACE}-vol-services-dedicated-claim
+    annotations:
+      template.alpha.openshift.io/wait-for-ready: "true"
+  spec:
+    storageClassName: ${STORAGE_CLASS}
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${SERV_VOL_SIZE}
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    name: hostedpassword
+    annotations:
+      template.openshift.io/base64-expose-password: "{.data['hosted-password']}"
+  type: Opaque
+  data:
+    hosted-password: ${{APPLICATION_PASSWORD}}
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: ispassword-config
+  data:
+    updatePassword_services.sh: |
+      #!/bin/sh
+      if [[ $APP_PASSWORD != "" ]]; then
+       if [[ ! -f ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/servicespasswordchanged ]]; then
+         echo "Shutdown Services to change passwords for isadmin and certificate"
+         /opt/IBM/InformationServer/ASBServer/bin/MetadataServer.sh stop;
+         echo "Changing isadmin password"
+         (cd /opt/IBM/InformationServer/ASBServer/bin; ./DirectoryAdmin.sh -user -userid isadmin -password $APP_PASSWORD)
+         echo "Changing certificate passwords..."
+         (cd /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security; rm -rf iis-server-keystore.p12; /opt/IBM/InformationServer/jdk/bin/keytool -genkeypair -dname 'CN=is-servicesdocker,OU=Software Group,O=IBM,C=US'  -keystore ./iis-server-keystore.p12 -keypass ${APP_PASSWORD//[$'\t\r\n ']} -storepass ${APP_PASSWORD//[$'\t\r\n ']} -validity 2920  -alias iisSSL -keyalg RSA -keysize 2048 -sigalg SHA512withRSA -storetype PKCS12)
+         /opt/IBM/InformationServer/jdk/bin/keytool -importkeystore -srckeystore /opt/IBM/InformationServer/initScripts/iiscert.p12 -srcstoretype PKCS12 -destkeystore /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12 -deststoretype PKCS12 -srcalias iiscert -srcstorepass iiskeypass -deststorepass ${APP_PASSWORD//[$'\t\r\n ']} -destkeypass ${APP_PASSWORD//[$'\t\r\n ']}
+       /opt/IBM/InformationServer/wlp/bin/securityUtility encode --encoding=aes ${APP_PASSWORD//[$'\t\r\n ']} > /tmp/sec_passwd
+       SEC_PASSWD="$(awk '{print $1 }' </tmp/sec_passwd)"
+       sudo sed -ie --follow-symlinks "s|iis\.keystore\.password.*|iis\.keystore\.password=${SEC_PASSWD}|g" /opt/IBM/InformationServer/wlp/usr/servers/iis/bootstrap.properties;
+         /opt/IBM/InformationServer/jdk/bin/keytool -storepasswd -storepass isadmin -new ${APP_PASSWORD//[$'\t\r\n ']} -keystore /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-truststore.jks
+         cp -p /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12 ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/Config/resources/security/iis-server-keystore.p12
+         rm -rf /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12
+         ln -s ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/Config/resources/security/iis-server-keystore.p12 /opt/IBM/InformationServer/wlp/usr/servers/iis/resources/security/iis-server-keystore.p12
+         /opt/IBM/InformationServer/ASBServer/bin/MetadataServer.sh run;
+       fi
+      fi
+    updatePassword_engine.sh: |
+      #!/bin/sh
+      #Script to change the passwords
+      if [[ $APP_PASSWORD != "" ]]; then
+      pwd_change=2;
+       while [ $pwd_change != 0 ];
+       do sleep 5;
+       outValue=`/opt/IBM/InformationServer/ASBNode/bin/UpdateSignerCerts.sh -url https://is-servicesdocker:9446 -user isadmin -password ${APP_PASSWORD//[$'\t\r\n ']} -silent; echo $?`
+       if [[ $outValue != *"Login failed"* ]]; then
+        pwd_change=0
+       else
+        pwd_change=2
+       fi
+       done;
+      (cd /opt/IBM/InformationServer/ASBNode/bin; ./NodeAgents.sh restart;)
+      fi
+    db2password_change.sh: |
+      #!/bin/sh
+      if [[ ! -f ${DEDICATED_REPOS_VOLPATH}/${HOSTNAME}/password_changed ]];
+      then
+      su - db2inst1 -c ". /home/db2inst1/sqllib/db2profile; db2 connect to XMETA; db2 \"CALL SYSPROC.ADMIN_ROTATE_MASTER_KEY (NULL)\"; db2 terminate; db2 connect to dsodb; db2 \"CALL SYSPROC.ADMIN_ROTATE_MASTER_KEY (NULL)\"; db2 terminate;";
+      su - db2inst1 -c "cd /home/db2inst1/Repos/hosted; ~/sqllib/db2profile; export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:~/sqllib/lib64/gskit; ~/sqllib/gskit/bin/gsk8capicmd_64 -keydb -changepw -db /home/db2inst1/Repos/hosted/db2keystore.p12 -pw isadmin -new_pw ${APP_PASSWORD//[$'\t\r\n ']}  -stash";
+      sudo touch  ${DEDICATED_REPOS_VOLPATH}/${HOSTNAME}/password_changed;
+      fi
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: customer-config
+  data:
+    customerconfig_services.sh: |
+      #!/bin/sh
+      echo "Executes the configurations needed by customer as part of container startup"
+    customerconfig_engine.sh: |
+      #!/bin/sh
+      echo "Executes the configurations needed by customer as part of container startup"
+    customerconfig_repo.sh: |
+      #!/bin/sh
+      echo "Executes the configurations needed by customer as part of container startup"
+    customerconfig_compute.sh: |
+      #!/bin/sh
+      echo "Executes the configurations needed by customer as part of container startup"
+- apiVersion: v1
+  kind: ConfigMap
+  metadata:
+    name: is-en-conductor-0
+  data:
+    MASTER_host: is-en-conductor-0
+    MASTER_localtime: ../usr/share/zoneinfo/America/Los_Angeles
+- apiVersion: apps.openshift.io/v1
+  kind: DeploymentConfig
+  metadata:
+   name: is-xmetadocker-pod
+   annotations:
+     template.alpha.openshift.io/wait-for-ready: "true"
+   labels:
+     run: is-xmetadocker-deployment
+  spec:
+   replicas: 1
+   selector:
+     run: is-xmetadocker-deployment-pod
+   strategy:
+     type: Recreate
+     recreateParams:
+       timeoutSeconds: 2400
+   template:
+     metadata:
+       labels:
+        app: is-repository
+        component: is-xmetadocker-pod
+        run: is-xmetadocker-deployment-pod
+     spec:
+       hostname: is-xmetadocker
+       hostIPC: true
+       securityContext:
+         runAsUser: 1000
+       affinity:
+         nodeAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+             nodeSelectorTerms:
+             - matchExpressions:
+               - key: "node-role.kubernetes.io/master"
+                 operator: NotIn
+                 values:
+                 - ""
+         podAffinity:
+           preferredDuringSchedulingIgnoredDuringExecution:
+           - weight: 1
+             podAffinityTerm:
+               labelSelector:
+                 matchExpressions:
+                 - key: app
+                   operator: In
+                   values:
+                   - is-services
+               topologyKey: "kubernetes.io/hostname"
+         podAntiAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+           - labelSelector:
+               matchExpressions:
+               - key: app
+                 operator: In
+                 values:
+                 - is-en-conductor
+             topologyKey: "kubernetes.io/hostname"
+       initContainers:
+       - name: load-data
+         image: ${CONTAINER_REGISTRY_PREFIX}is-db2xmeta-image:${IMAGE_VERSION}
+         imagePullPolicy: IfNotPresent
+         securityContext:
+           capabilities:
+            add: ["SETFCAP", "SYS_NICE", "IPC_OWNER"]
+         command: ['/bin/bash', '-c', '--']
+         args: [ " set -x;
+                   datadir=/home/db2inst1/Repos;
+                   installdir=/opt/IBM/InformationServer;
+                   if [ ! -d ${datadir}/xmeta ];
+                   then
+                    ${installdir}/initScripts/initReposVolumeData.sh;
+                   else
+                   chown -R db2inst1:db2iadm1 ${datadir};
+                   chmod -R 755 ${datadir};
+                   fi;
+                   su - db2inst1 -c '/bin/rm -rf /home/db2inst1/sqllib/.ftok; /home/db2inst1/sqllib/bin/db2ftok';
+                   su - db2inst1 -c '/bin/rm -rf /home/db2inst1/sqllib/ctrl/db2strst.lck; /bin/rm -rf /home/db2inst1/sqllib/ctrl/db2stst.0000';
+                   su - db2inst1 -c '. sqllib/db2profile; db2start';
+                   su - db2inst1 -c '. sqllib/db2profile; db2 catalog database XMETA on /home/db2inst1/Repos/xmeta;
+                   db2 catalog database DSODB on /home/db2inst1/Repos/dsodb';
+                   su - db2inst1 -c '. sqllib/db2profile; db2 activate database xmeta; db2 activate db dsodb';
+                   su - db2inst1 -c '. /home/db2inst1/sqllib/db2profile;
+                   db2 connect to xmeta; db2 -tvf /opt/IBM/InformationServer/initScripts/updateNodeCert.sql;
+                   db2 connect reset;';
+                   su - db2inst1 -c '. /home/db2inst1/sqllib/db2profile; db2stop force;';
+                  "
+               ]
+         env:
+         - name: DEDICATED_REPOS_VOLPATH
+           value: /mnt/${NAMESPACE}/Repository
+         volumeMounts:
+         - name: xmeta-pv-volume
+           mountPath: "/mnt/${NAMESPACE}/Repository"
+       containers:
+       - name: is-xmetadocker-container
+         image: ${CONTAINER_REGISTRY_PREFIX}is-db2xmeta-image:${IMAGE_VERSION}
+         command: [ "/bin/bash", "-c", "--" ]
+         args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/db2password_change.sh;
+            /opt/IBM/InformationServer/initScripts/customerconfig_repo.sh;
+            echo \"Container is ready to use\"; tail -f /dev/null
+            & wait $!"
+               ]
+         resources:
+           requests:
+             memory: "4000Mi"
+             cpu: "2000m"
+         securityContext:
+           runAsUser: 1000
+           privileged: false
+           capabilities:
+             add: ["SETFCAP", "SYS_NICE", "IPC_OWNER"]
+         imagePullPolicy: IfNotPresent
+         ports:
+         - containerPort: 50000
+           protocol: TCP
+         env:
+           - name: MY_NODE_NAME
+             valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+           - name: MY_POD_NAME
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+           - name: MY_POD_NAMESPACE
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+           - name: DEDICATED_REPOS_VOLPATH
+             value: "/mnt/${NAMESPACE}/Repository"
+           - name: APP_PASSWORD
+             valueFrom:
+                secretKeyRef:
+                   name: hostedpassword
+                   key:  hosted-password
+         livenessProbe:
+           tcpSocket:
+             port: 50000
+           initialDelaySeconds: 800
+           periodSeconds: 60
+           failureThreshold: 3
+         volumeMounts:
+          - mountPath: "/mnt/${NAMESPACE}/Repository"
+            name: xmeta-pv-volume
+          - mountPath: /opt/IBM/InformationServer/initScripts/db2password_change.sh
+            name: passwordupdate
+            subPath: db2password_change.sh
+          - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_repo.sh
+            name: customerconfig
+            subPath: customerconfig_repo.sh
+       volumes:
+         - name: xmeta-pv-volume
+           persistentVolumeClaim:
+             claimName: ${NAMESPACE}-vol-repos-dedicated-claim
+         - name: passwordupdate
+           configMap:
+             name: ispassword-config
+             defaultMode: 0755
+         - name: customerconfig
+           configMap:
+             name: customer-config
+             defaultMode: 0755
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: is-xmetadocker
+    labels:
+      run: is-xmetadocker-svc
+      component: is-xmetadocker-pod
+  spec:
+    type: ClusterIP
+    ports:
+    - name: is-xmetadocker-port
+      protocol: TCP
+      port: 50000
+      targetPort: 50000
+    selector:
+     run: is-xmetadocker-deployment-pod
+     component: is-xmetadocker-pod
+- apiVersion: apps.openshift.io/v1
+  kind: DeploymentConfig
+  metadata:
+   name: is-servicesdocker-pod
+   annotations:
+     template.alpha.openshift.io/wait-for-ready: "true"
+   labels:
+     run: is-servicesdocker-deployment
+  spec:
+   replicas: 1
+   selector:
+     run: is-servicesdocker-deployment-pod
+   strategy:
+     type: Recreate
+     recreateParams:
+       timeoutSeconds: 2400
+   template:
+     metadata:
+       labels:
+        app: is-services
+        component: is-servicesdocker-pod
+        run: is-servicesdocker-deployment-pod
+     spec:
+       hostname: is-servicesdocker
+       affinity:
+         nodeAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+             nodeSelectorTerms:
+             - matchExpressions:
+               - key: "node-role.kubernetes.io/master"
+                 operator: NotIn
+                 values:
+                 - ""
+         podAffinity:
+           preferredDuringSchedulingIgnoredDuringExecution:
+           - weight: 1
+             podAffinityTerm:
+               labelSelector:
+                 matchExpressions:
+                 - key: app
+                   operator: In
+                   values:
+                   - is-repository
+               topologyKey: "kubernetes.io/hostname"
+         podAntiAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+           - labelSelector:
+               matchExpressions:
+               - key: app
+                 operator: In
+                 values:
+                 - is-en-conductor
+             topologyKey: "kubernetes.io/hostname"
+       initContainers:
+       - name: xmeta-wait
+         image: busybox:latest
+         imagePullPolicy: IfNotPresent
+         command: ['sh', '-c', '--']
+         args: [ "xmeta_status=1;
+                 while [ $xmeta_status != 0  ];
+                 do sleep 2;
+                 xmeta_status=`nc is-xmetadocker 50000 < /dev/null; echo $?`;
+                 done;"
+               ]
+       containers:
+       - name: is-servicesdocker-container
+         image: ${CONTAINER_REGISTRY_PREFIX}is-services-image:${IMAGE_VERSION}
+         command: [ "/bin/bash", "-c", "--" ]
+         args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/updatePassword_services.sh;
+            sudo touch ${DEDICATED_SERVICES_VOLPATH}/${HOSTNAME}/servicespasswordchanged;
+            /opt/IBM/InformationServer/initScripts/customerconfig_services.sh;
+            touch /opt/1.txt;
+            echo \"1\" >> /opt/1.txt;
+            /opt/IBM/InformationServer/ASBServer/bin/imam.sh --username isadmin --password $APP_PASSWORD --action createMis --misName \"BridgeServer\" --misDescription \"Metadata Interchange Server\" --misHost $DSCLIENT_PRIVATE_IP --misPort 19443 --log < /opt/1.txt;
+            echo \"Container is ready to use\";
+            tail -F /opt/IBM/InformationServer/wlp/usr/servers/iis/logs/messages.log &
+            while true; do sleep 30; done;"
+               ]
+         resources:
+           requests:
+             memory: "2500Mi"
+             cpu: "500m"
+         securityContext:
+           runAsUser: 10032
+           privileged: false
+           capabilities:
+             add: ["SYS_RESOURCE"]
+         imagePullPolicy: IfNotPresent
+         ports:
+         - containerPort: 9446
+           protocol: TCP
+         env:
+           - name: MASTER_localtime
+             valueFrom:
+               configMapKeyRef:
+                 name: is-en-conductor-0
+                 key: MASTER_localtime
+           - name: MASTER_host
+             valueFrom:
+               configMapKeyRef:
+                 name: is-en-conductor-0
+                 key: MASTER_host
+           - name: MY_NODE_NAME
+             valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+           - name: MY_POD_NAME
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+           - name: MY_POD_NAMESPACE
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+           - name: DEDICATED_SERVICES_VOLPATH
+             value: "/mnt/${NAMESPACE}/Services"
+           - name: DSCLIENT_PRIVATE_IP
+             value: "${DSCLIENT_PRIVATE_IP}"
+           - name: APP_PASSWORD
+             valueFrom:
+                secretKeyRef:
+                   name: hostedpassword
+                   key:  hosted-password
+         livenessProbe:
+           tcpSocket:
+             port: 9446
+           initialDelaySeconds: 2400
+           periodSeconds: 120
+           failureThreshold: 3
+         volumeMounts:
+          - mountPath: "/mnt/${NAMESPACE}/Services"
+            name: services-dedicated-volume
+          - mountPath: /opt/IBM/InformationServer/initScripts/updatePassword_services.sh
+            name: passwordupdate
+            subPath: updatePassword_services.sh
+          - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_services.sh
+            name: customerconfig
+            subPath: customerconfig_services.sh
+       volumes:
+         - name: services-dedicated-volume
+           persistentVolumeClaim:
+             claimName: ${NAMESPACE}-vol-services-dedicated-claim
+         - name: passwordupdate
+           configMap:
+             name: ispassword-config
+             defaultMode: 0755
+         - name: customerconfig
+           configMap:
+             name: customer-config
+             defaultMode: 0755
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: is-servicesdocker
+    labels:
+      run: is-servicesdocker-svc
+      component: is-servicesdocker-pod
+  spec:
+    type: ClusterIP
+    ports:
+    - name: is-servicesdocker-port
+      protocol: TCP
+      port: 9446
+      targetPort: 9446
+    selector:
+     run: is-servicesdocker-deployment-pod
+     component: is-servicesdocker-pod
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: en-cond
+    labels:
+      app: en-cond
+  spec:
+    ports:
+    - port: 80
+      name: en-cond
+    clusterIP: None
+    selector:
+      app: is-en-conductor
+- apiVersion: apps/v1beta1
+  kind: StatefulSet
+  metadata:
+    name: is-en-conductor
+  spec:
+    serviceName: "en-cond"
+    replicas: 1
+    updateStrategy:
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          app: is-en-conductor
+      spec:
+       affinity:
+         nodeAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+             nodeSelectorTerms:
+             - matchExpressions:
+               - key: "node-role.kubernetes.io/master"
+                 operator: NotIn
+                 values:
+                 - ""
+         podAntiAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+           - labelSelector:
+               matchExpressions:
+               - key: app
+                 operator: In
+                 values:
+                 - is-services
+                 - is-repository
+             topologyKey: "kubernetes.io/hostname"
+       initContainers:
+       - name: load-data
+         image: ${CONTAINER_REGISTRY_PREFIX}is-engine-image:${IMAGE_VERSION}
+         securityContext:
+           runAsUser: 10032
+           privileged: false
+         imagePullPolicy: IfNotPresent
+         env:
+           - name: DEDICATED_ENGINE_VOLPATH
+             value: "/mnt/${NAMESPACE}/Engine"
+           - name: HOSTNAME
+             value: "is-en-conductor-0"
+         command: [ "/bin/bash", "-c", "--" ]
+         args: [ "BKP_FILE=\"engine-services.tar.gz\";
+                 installdir=/opt/IBM/InformationServer;
+                 if [[  ! -d \"${DEDICATED_ENGINE_VOLPATH}/${HOSTNAME}/Server/Projects\" ]];
+                 then
+                 echo \"${DEDICATED_ENGINE_VOLPATH}/${HOSTNAME}/Server/Projects does not exist .. creating \";
+                 ${installdir}/initScripts/initEngineVolumeData.sh;
+                 fi;"
+               ]
+         volumeMounts:
+         - mountPath: "/mnt/${NAMESPACE}/Engine"
+           name: vol
+       - name: services-wait
+         image: busybox:latest
+         imagePullPolicy: IfNotPresent
+         command: ['sh', '-c', '--']
+         args: [ "services_status=1;
+                 while [ $services_status != 0  ];
+                 do sleep 2;
+                 services_status=`nc is-servicesdocker 9446 < /dev/null; echo $?`;
+                 done;"
+               ]
+       containers:
+       - name: is-en-conductor
+         image: ${CONTAINER_REGISTRY_PREFIX}is-engine-image:${IMAGE_VERSION}
+         command: [ "/bin/bash", "-c", "--" ]
+         args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/updatePassword_engine.sh;
+            /opt/IBM/InformationServer/initScripts/customerconfig_engine.sh;
+            sudo /usr/sbin/crond -n &
+            echo \"Container is ready to use\";
+            tail -F /opt/IBM/InformationServer/ASBNode/logs/asb-agent-0.out &
+            while true; do sleep 30; done;"
+               ]
+         lifecycle:
+           preStop:
+             exec:
+               command: ["/bin/bash", "-c", "/opt/IBM/InformationServer/initScripts/pre-stop.sh"]
+         resources:
+           requests:
+             cpu: "1000m"
+             memory: "2000Mi"
+         securityContext:
+           runAsUser: 10032
+           privileged: false
+         imagePullPolicy: IfNotPresent
+         env:
+           - name: MASTER_localtime
+             valueFrom:
+               configMapKeyRef:
+                 name: is-en-conductor-0
+                 key: MASTER_localtime
+           - name: MY_NODE_NAME
+             valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+           - name: MY_POD_NAME
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+           - name: NAME_SPACE
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+           - name: DEDICATED_ENGINE_VOLPATH
+             value: "/mnt/${NAMESPACE}/Engine"
+           - name: APP_PASSWORD
+             valueFrom:
+                secretKeyRef:
+                   name: hostedpassword
+                   key:  hosted-password
+         livenessProbe:
+           exec:
+             command:
+               - /bin/bash
+               - -c
+               - netstat -nl|grep -E "31531|8449|31538" > /tmp/engine_ports_out.txt; [[ $(cat /tmp/engine_ports_out.txt|wc -l) -ge 3 ]] && exit 0 || exit 1
+           initialDelaySeconds: 900
+           periodSeconds: 120
+           failureThreshold: 3
+         volumeMounts:
+          - mountPath: /home/dsadm
+            name: vol
+            subPath: is-en-conductor-0/EngineClients/db2_client/dsadm
+          - mountPath: /home/db2inst1
+            name: vol
+            subPath: is-en-conductor-0/EngineClients/db2_client/db2inst1
+          - mountPath: /home_
+            name: vol
+            subPath: is-en-conductor-0/EngineClients/db2_client/home_
+          - mountPath: "/mnt/${NAMESPACE}/Engine"
+            name: vol
+          - mountPath: /opt/IBM/InformationServer/initScripts/updatePassword_engine.sh
+            name: passwordupdate
+            subPath: updatePassword_engine.sh
+          - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_engine.sh
+            name: customerconfig
+            subPath: customerconfig_engine.sh
+       volumes:
+       - name: vol
+         persistentVolumeClaim:
+           claimName: ${NAMESPACE}-vol-engine-dedicated-claim
+       - name: passwordupdate
+         configMap:
+           name: ispassword-config
+           defaultMode: 0755
+       - name: customerconfig
+         configMap:
+           name: customer-config
+           defaultMode: 0755
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: is-en-conductor
+    name: is-en-conductor-0
+  spec:
+    ports:
+    - name: cond-rpc-port
+      port: 31538
+      protocol: TCP
+      targetPort: 31538
+      nodePort: 32501
+    - name: asb-agent-port
+      port: 31531
+      protocol: TCP
+      targetPort: 31531
+      nodePort: 32502
+    selector:
+      app: is-en-conductor
+    type: NodePort
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: conductor-0
+    labels:
+      app: conductor-0
+  spec:
+    ports:
+    - port: 80
+      name: conductor-0
+    clusterIP: None
+    selector:
+      app: is-engine-compute
+- apiVersion: apps/v1beta1
+  kind: StatefulSet
+  metadata:
+    name: is-engine-compute
+  spec:
+    serviceName: "conductor-0"
+    replicas: 2
+    updateStrategy:
+      type: RollingUpdate
+    template:
+      metadata:
+        labels:
+          app: is-engine-compute
+      spec:
+       affinity:
+         nodeAffinity:
+           requiredDuringSchedulingIgnoredDuringExecution:
+             nodeSelectorTerms:
+             - matchExpressions:
+               - key: "node-role.kubernetes.io/master"
+                 operator: NotIn
+                 values:
+                 - ""
+         podAntiAffinity:
+           preferredDuringSchedulingIgnoredDuringExecution:
+           - weight: 50
+             podAffinityTerm:
+               labelSelector:
+                 matchExpressions:
+                 - key: app
+                   operator: In
+                   values:
+                   - is-engine-compute
+               topologyKey: "kubernetes.io/hostname"
+       initContainers:
+       - name: engine-wait
+         image: busybox:latest
+         imagePullPolicy: IfNotPresent
+         command: ['sh', '-c', '--']
+         args: [ "engine_status=1;
+                 while [ $engine_status != 0  ];
+                 do sleep 2;
+                 engine_status=`nc is-en-conductor-0 31538 < /dev/null; echo $?`;
+                 done;"
+               ]
+       containers:
+       - name: is-engine-compute
+         image: ${CONTAINER_REGISTRY_PREFIX}is-en-compute-image:${IMAGE_VERSION}
+         command: [ "/bin/bash", "-c", "--" ]
+         args: ["sed -i \"s/tail -f/#tail -f/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            sed -i \"s/wait/#wait/g\" /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/startcontainer.sh;
+            /opt/IBM/InformationServer/initScripts/customerconfig_compute.sh;
+            echo \"Container is ready to use\";
+            tail -f /dev/null
+            & wait $!"
+               ]
+         resources:
+           requests:
+             memory: "1000Mi"
+             cpu: "500m"
+         securityContext:
+           runAsUser: 10032
+           privileged: false
+         imagePullPolicy: IfNotPresent
+         env:
+           - name: MASTER_localtime
+             valueFrom:
+               configMapKeyRef:
+                 name: is-en-conductor-0
+                 key: MASTER_localtime
+           - name: MY_NODE_NAME
+             valueFrom:
+               fieldRef:
+                 fieldPath: spec.nodeName
+           - name: MY_POD_NAME
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+           - name: NAME_SPACE
+             valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+           - name: DEDICATED_ENGINE_VOLPATH
+             value: "/mnt/${NAMESPACE}/Engine"
+           - name: ENGINE_HOST
+             value: "is-en-conductor-0"
+           - name: APP_PASSWORD
+             valueFrom:
+                secretKeyRef:
+                   name: hostedpassword
+                   key:  hosted-password
+         livenessProbe:
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            tcpSocket:
+              port: 13502
+         readinessProbe:
+            initialDelaySeconds: 120
+            periodSeconds: 60
+            tcpSocket:
+              port: 13502
+         volumeMounts:
+          - mountPath: "/mnt/${NAMESPACE}/Engine"
+            name: vol
+          - mountPath: /home/dsadm
+            name: vol
+            subPath: is-en-conductor-0/EngineClients/db2_client/dsadm
+          - mountPath: /home/db2inst1
+            name: vol
+            subPath: is-en-conductor-0/EngineClients/db2_client/db2inst1
+          - mountPath: /home_
+            name: vol
+            subPath: is-en-conductor-0/EngineClients/db2_client/home_
+          - mountPath: /opt/IBM/InformationServer/initScripts/customerconfig_compute.sh
+            name: customerconfig
+            subPath: customerconfig_compute.sh
+       volumes:
+       - name: vol
+         persistentVolumeClaim:
+           claimName: ${NAMESPACE}-vol-engine-dedicated-claim
+       - name: customerconfig
+         configMap:
+           name: customer-config
+           defaultMode: 0755
+
+parameters:
+# - description: Namespace where to upload docker images.
+#   displayName: Container Registry Namespace
+#   name: CONTAINER_REGISTRY_NAMESPACE
+#   required: true
+# - description: Repository which is near to the Cluster region.
+#   displayName: Container Registry Repository
+#   name: CONTAINER_REGISTRY_REPO
+#   required: true
+- description: Prefix of Docker container registry including registry URL and registry namespace
+  displayName: Container registry repo prefix
+  name: CONTAINER_REGISTRY_PREFIX
+  required: true
+- description: Version tag of DataStage images.
+  displayName: Image Version Tag
+  name: IMAGE_VERSION
+  required: true
+  value: 11.7.1.1-1.0
+- description: Namespace where to install DataStage.
+  displayName: Namespace
+  name: NAMESPACE
+  required: true
+- description: Storage class name.
+  displayName: StorageClass
+  name: STORAGE_CLASS
+  value: "glusterfs-storage"
+  required: true
+- description: Volume Size for DB2 Repository.
+  displayName: Repo volume size
+  name: REPO_VOL_SIZE
+  value: "300Gi"
+  required: true
+- description: Volume Size for Services.
+  displayName: Services volume size
+  name: SERV_VOL_SIZE
+  value: "200Gi"
+  required: true
+- description: Volume Size for Engine.
+  displayName: Engine volume size
+  name: ENGINE_VOL_SIZE
+  value: "300Gi"
+  required: true
+- description: Password to be used for Application login, should be in base64. echo -n 'password' | base64
+  displayName: Application User password in base64
+  name: APPLICATION_PASSWORD
+  required: true
+- description: Services tier hostname that resolves to ip in a route resource.
+  displayName: Hostname for Services tier
+  name: SERVICES_HOSTNAME
+  required: false
+- description: Private IP of the DataStage Client machine
+  displayName: DataStage client private IP
+  name: DSCLIENT_PRIVATE_IP
+  required: true
