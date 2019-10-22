@@ -21,6 +21,18 @@ tests:
   ds-master-3az:
     parameter_input: ds-master-3az-parameters.json
     template_file: ibm-datastage-master.template.yaml
+    regions:
+      - us-east-1
+      - us-west-2
+      - ap-south-1
+      - eu-west-2
+      - eu-west-3
   ds-master-1az:
     parameter_input: ds-master-1az-parameters.json
     template_file: ibm-datastage-master.template.yaml
+    regions:
+      - us-east-2
+      - eu-central-1
+      - eu-west-1
+      - ap-southeast-1
+      - ap-southeast-2
