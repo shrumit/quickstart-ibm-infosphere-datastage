@@ -139,7 +139,7 @@ Parameters:
   ContainerAccessCIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/x
-    Description: The CIDR IP range that is permitted to access the instances. We recommend
+    Description: The CIDR IP range that is permitted to access the DataStage Windows client and Launchpad web page. We recommend
       that you set this value to a trusted IP range.
     Type: String
   DSClientInstanceType:
@@ -165,7 +165,7 @@ Parameters:
     Description: The type of EC2 instance for the DataStage Windows Client instance.
     Type: String
   EtcdInstanceType:
-    Default: t3.xlarge
+    Default: m5.xlarge
     AllowedValues:
       - t3.xlarge
       - t3.2xlarge
@@ -260,7 +260,7 @@ Parameters:
       - I agree
       - '-'
   MasterInstanceType:
-    Default: t3.xlarge
+    Default: m5.xlarge
     AllowedValues:
       - t3.xlarge
       - t3.2xlarge
@@ -394,15 +394,14 @@ Parameters:
   RemoteAccessCIDR:
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/x
-    Description: The CIDR IP range that is permitted to access the instances. We recommend
+    Description: The CIDR IP range that is permitted to access the OpenShift master nodes and OCP UI. We recommend
       that you set this value to a trusted IP range.
     Type: String
   ResourceTag:
     AllowedPattern: '[a-z0-9]+'
     ConstraintDescription: Non-empty. Must be lower case letters and numbers only.
     Default: ds1
-    Description: This will be used to label AWS resources and the DataStage Kubernetes
-      namespace. Ensure that every InfoSphere DataStage deployment on your AWS account
+    Description: This will be used to label AWS resources and the DataStage project in OpenShift. Ensure that every InfoSphere DataStage deployment on your AWS account
       uses a unique resource tag.
     MaxLength: "63" # exceeds a tag limit if longer
     Type: String
