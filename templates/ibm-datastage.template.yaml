@@ -57,7 +57,7 @@ Metadata:
         - OutputBucketName
     ParameterLabels:
       ContainerAccessCIDR:
-        default: Allowed External Access CIDR (OCP Router)
+        default: Container access CIDR
       ClusterAvailability:
         default: Cluster availability
       DSClientInstanceType:
@@ -136,8 +136,8 @@ Parameters:
   ContainerAccessCIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/x
-    Description: The CIDR IP range that is permitted to access the DataStage Windows client and Launchpad web page. We recommend
-      that you set this value to a trusted IP range.
+    Description: The CIDR IP range that is permitted to access the Windows client instance and InfoSphere Launchpad from a web browser. We recommend
+      that you set this value to a trusted IP range. For example, you might want to grant only your corporate network access to the software.
     Type: String
   DSClientInstanceType:
     AllowedValues:
@@ -362,7 +362,8 @@ Parameters:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/x
     Description: The CIDR IP range that is permitted to access the OpenShift master nodes and OCP UI. We recommend
-      that you set this value to a trusted IP range.
+      that you set this value to a trusted IP range. For example, you might want to grant only your corporate network
+      access to the software.
     Type: String
   ResourceTag:
     AllowedPattern: '[a-z0-9]+'
