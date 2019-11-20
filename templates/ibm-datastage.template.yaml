@@ -509,6 +509,7 @@ Resources:
         GlusterStorageIops: !Ref GlusterStorageIops
         GlusterStorageSize: !Ref GlusterStorageSize
         GlusterStorageType: !Ref GlusterStorageType
+        AnsibleFromGit: 'True'
         AnsiblePostInstallScript: !Sub 's3://${QSS3BucketName}/${QSS3KeyPrefix}scripts/post-install.sh'
         AnsibleAdditionalEnvironmentVariables: !Join
           - ','
